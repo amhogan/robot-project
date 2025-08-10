@@ -24,3 +24,11 @@ _Last updated: 2025-08-10_
 3) Add CPU temp + uptime to dashboard
 4) FS-i6 → RoboClaw wiring & mapping (post-recovery)
 Sun Aug 10 11:58:40 PDT 2025 – heartbeat
+
+---
+
+## Progress (2025-08-10)
+- Repo synced to GitHub (`main`) and structure finalized.
+- Netstatus endpoints ready; dashboard pending re-mount to repo `site/`.
+- SMB backup working to `//10.22.22.11/7tb/share` as user `robotbackup`.
+- Plan: mount `//10.22.22.11/7tb` at `/mnt/robot-builds` for build artifacts; first attempt hit CIFS Permission denied (will retry with `sec=ntlmssp` + ACLs).
