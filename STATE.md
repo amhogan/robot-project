@@ -23,3 +23,4 @@ _Last updated: 2025-08-10_
 2) NIC preference (eth0 over wlan0)
 3) Add CPU temp + uptime to dashboard
 4) FS-i6 → RoboClaw wiring & mapping (post-recovery)
+Sun Aug 10 11:58:40 PDT 2025 – heartbeat
