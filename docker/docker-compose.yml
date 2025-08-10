@@ -1,0 +1,26 @@
+services:
+  netstatus:
+    build:
+      context: ../services/netstatus
+    container_name: netstatus
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/status"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  video-dashboard:
+    image: nginx:alpine
+    container_name: video-dashboard
+    volumes:
+      - ../site:/usr/share/nginx/html:ro
+      - ../site/nginx/robot-mjpeg.conf:/etc/nginx/conf.d/robot-mjpeg.conf:ro
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    depends_on:
+      netstatus:
+        condition: service_healthy
