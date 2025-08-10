@@ -11,3 +11,33 @@ log/
 .vscode/
 .idea/
 *.swp
+
+# --- build artifacts / caches ---
+build/
+install/
+log/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+.cache/
+.tmp/
+*.tar
+*.tar.gz
+*.zip
+
+# media / large
+*.mp4
+*.mkv
+*.mov
+*.avi
+
+# node / web
+node_modules/
+.next/
+coverage/
+
+# editors
+.vscode/
+.idea/
+*.swp
