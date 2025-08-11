@@ -1,34 +1,23 @@
-# Robot Project — State Sheet
-_Last updated: 2025-08-10_
+# Robot Project Status Report
+**Date:** 2025-08-10  
+**System:** RPi-Robot (Raspberry Pi 5, Ubuntu, Docker, ROS 2 Iron)
 
-## Hardware
-- Raspberry Pi 5 (“RPi-Robot”), Ubuntu; USB camera + Wyze (secondary). SSH enabled.
-- RoboClaw 2x30 — **stuck in bootloader** (awaiting recovery).
-- Future: GPS module (planned).
+## 1. Current Working Components
+- Video Stream: operational via web_video_server (`/stream?topic=/camera/image_raw`).
+- System Metrics: CPU temperature + uptime displayed correctly.
+- Networking: Nginx proxy healthy; dashboard reachable; inter-container DNS OK.
 
-## Network
-- pfSense router; Asus ExpertWiFi EBM68 WAP at 10.22.22.7.
-- IPs: eth0 = 10.22.22.34, wlan0 = 10.22.22.35 (prefer eth0 when wired).
+## 2. Partially Working / In Progress
+- Dashboard Stats: CPU%, memory%, disk% placeholders still blank.
+- netstatus: serving temp/uptime; needs more metrics endpoints.
+- RoboClaw: in bootloader recovery; USB recognized; Motion Studio pending.
 
-## Containers / Services
-- ros-core — persistent ✅
-- video-dashboard (nginx) — camera + stats ✅
-- netstatus (Flask) — CPU/mem ✅; add CPU temp + uptime
-- usb-camera — MJPEG/ROS source ✅
-- opencv-node — minimal ROS 2 node ✅
-- roboclaw-driver — ROS 2 pkg heartbeats; blocked by hardware ⚠️
+## 3. Outstanding Issues
+1) Extend netstatus to expose CPU%, Mem%, Disk%, (optional) Net I/O.
+2) Complete RoboClaw firmware recovery and regain motor control.
+3) Verify all containers restart on boot.
+4) Add backup automation via systemd timer (script exists).
 
-## Open Issues
-1) RoboClaw recovery (reflash)
-2) NIC preference (eth0 over wlan0)
-3) Add CPU temp + uptime to dashboard
-4) FS-i6 → RoboClaw wiring & mapping (post-recovery)
-Sun Aug 10 11:58:40 PDT 2025 – heartbeat
-
----
-
-## Progress (2025-08-10)
-- Repo synced to GitHub (`main`) and structure finalized.
-- Netstatus endpoints ready; dashboard pending re-mount to repo `site/`.
-- SMB backup working to `//10.22.22.11/7tb/share` as user `robotbackup`.
-- Plan: mount `//10.22.22.11/7tb` at `/mnt/robot-builds` for build artifacts; first attempt hit CIFS Permission denied (will retry with `sec=ntlmssp` + ACLs).
+## 4. Next Steps
+- Short-term: expand netstatus; wire up dashboard; retest.
+- Long-term: GPS integration; patrol/security features; manual driving controls.
