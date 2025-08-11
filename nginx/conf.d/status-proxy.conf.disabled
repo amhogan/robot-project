@@ -1,0 +1,13 @@
+# Re-resolve Docker service names so IP changes don’t break upstreams
+resolver 127.0.0.11 ipv6=off valid=30s;
+
+# Use a variable so nginx re-resolves 'netstatus' each request
+set $netstatus http://netstatus:7070;
+
+# Backend JSON
+location = /api/netstatus   { proxy_pass $netstatus/api/netstatus; }
+
+# Frontend aliases (so the page can call /status*)
+location = /status          { proxy_pass $netstatus/api/netstatus; }
+location = /status_temp     { proxy_pass $netstatus/api/netstatus; }
+location = /status_uptime   { proxy_pass $netstatus/api/netstatus; }

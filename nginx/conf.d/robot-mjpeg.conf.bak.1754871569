@@ -1,0 +1,47 @@
+server {
+    listen 80;
+    server_name _;
+
+    # Serve the dashboard files
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # --- Keep any existing camera proxy locations here ---
+    # e.g.
+    # location /mjpeg { proxy_pass http://mjpeg-proxy:8080/stream; proxy_buffering off; }
+    # -----------------------------------------------------
+
+    # Docker DNS re-resolve (ONE resolver line only)
+    resolver 127.0.0.11 ipv6=off valid=30s;
+
+    # Use a variable so Nginx re-resolves at request time
+    set $netstatus http://netstatus:7070;
+
+    # Backend JSON
+    location = /api/netstatus   { proxy_pass $netstatus/api/netstatus; }
+
+    # Frontend aliases (all return the same JSON for now)
+    location = /status          { proxy_pass $netstatus/api/netstatus; }
+    location = /status_temp     { proxy_pass $netstatus/api/netstatus; }
+    location = /status_uptime   { proxy_pass $netstatus/api/netstatus; }
+
+    # MJPEG stream (adjust service/port/path if yours differs)
+    location /mjpeg {
+        proxy_pass http://mjpeg-proxy:8080/stream;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+    }
+
+    # Resolve at request-time (works even if container IPs change)
+    set $camera http://mjpeg-proxy:8080;
+
+    location /mjpeg {
+        proxy_pass $camera/stream;   # we'll change this once we find the real service/path
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+    }
+}

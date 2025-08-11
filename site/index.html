@@ -1,24 +1,57 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Robot Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>body{font-family:system-ui,sans-serif;margin:1rem}#sys-stats{margin-top:1rem}</style>
-</head>
-<body>
-  <h1>Robot Dashboard</h1>
-  <div id="sys-stats">
-    <div>CPU Temp: <span id="cpu-temp">—</span></div>
-    <div>Uptime: <span id="uptime">—</span></div>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Robot Dashboard</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;margin:0;background:#0b0f14;color:#e8f0f6}
+header{padding:16px 20px;border-bottom:1px solid #1c2530;background:#0f141b}
+.wrap{max-width:1080px;margin:0 auto;padding:16px 20px}
+.grid{display:grid;gap:16px;grid-template-columns:1.2fr 0.8fr}
+.card{background:#0f141b;border:1px solid #1c2530;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.title{font-size:18px;margin:0 0 10px 0;color:#9ec3ff}
+.kv{display:flex;justify-content:space-between;margin:6px 0}.kv span{opacity:.8}
+.video{width:100%;height:auto;border-radius:10px;background:#111}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head><body>
+<header><strong>RPi-Robot Dashboard</strong></header>
+<div class="wrap">
+  <div class="grid">
+    <div class="card">
+      <h3 class="title">Camera</h3>
+      <img id="stream" class="video" src="/mjpeg" alt="Robot Video Stream"/>
+    </div>
+    <div class="card">
+      <h3 class="title">System Status</h3>
+      <div class="kv"><span>CPU Temp</span><strong id="cpuTemp">—</strong></div>
+      <div class="kv"><span>Uptime</span><strong id="uptime">—</strong></div>
+      <hr style="border:0;border-top:1px solid #1c2530;margin:10px 0"/>
+      <div class="kv"><span>Load</span><strong id="load">—</strong></div>
+      <div class="kv"><span>CPU %</span><strong id="cpu">—</strong></div>
+      <div class="kv"><span>Mem</span><strong id="mem">—</strong></div>
+      <div class="kv"><span>Disk</span><strong id="disk">—</strong></div>
+      <details style="margin-top:10px"><summary>Raw status</summary>
+        <pre id="raw" class="mono" style="white-space:pre-wrap"></pre>
+      </details>
+    </div>
   </div>
-  <script>
-  async function fetchJSON(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error(r.status);return r.json()}
-  function formatUptime(s){if(s==null)return"—";const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return `${d}d ${h}h ${m}m`}
-  async function updateTemp(){try{const j=await fetchJSON("/api/status_temp");const t=j.cpu_temp_c;document.getElementById("cpu-temp").textContent=(t==null)?"—":`${t.toFixed(1)} °C`}catch{document.getElementById("cpu-temp").textContent="—"}}
-  async function updateUptime(){try{const j=await fetchJSON("/api/status_uptime");document.getElementById("uptime").textContent=formatUptime(j.uptime_seconds)}catch{document.getElementById("uptime").textContent="—"}}
-  function schedule(){updateTemp();updateUptime();setInterval(()=>{updateTemp();updateUptime()},5000)}
-  document.addEventListener("DOMContentLoaded", schedule);
-  </script>
-</body>
-</html>
+</div>
+<script>
+const fmtUp=s=>{s=+s||0;const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return (d?d+'d ':'')+h+'h '+m+'m'};
+async function tick(){
+  try{
+    const r=await fetch('/api/netstatus',{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const s=await r.json();
+    document.getElementById('cpuTemp').textContent=(parseFloat(s.cpu_temp_c)||0).toFixed(1)+' °C';
+    document.getElementById('uptime').textContent = s.uptime_hms || fmtUp(s.uptime_seconds);
+    document.getElementById('load').textContent   = s.load_1 ?? '—';
+    document.getElementById('cpu').textContent    = s.cpu_percent ?? '—';
+    document.getElementById('mem').textContent    = s.mem_used ?? (s.mem_used_mb&&s.mem_total_mb?`${s.mem_used_mb}MB/${s.mem_total_mb}MB`:'—');
+    document.getElementById('disk').textContent   = s.disk_used ?? (s.disk_used_gb&&s.disk_total_gb?`${s.disk_used_gb}GB/${s.disk_total_gb}GB`:'—');
+    document.getElementById('raw').textContent    = JSON.stringify(s,null,2);
+  }catch(e){}finally{ setTimeout(tick,2000); }
+}
+tick();
+</script>
+</body></html>
