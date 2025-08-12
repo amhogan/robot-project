@@ -54,4 +54,43 @@ async function tick(){
 }
 tick();
 </script>
+<script>
+async function refreshStats() {
+  try {
+    const r = await fetch('/status');
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+
+    // temp
+    document.getElementById('tempValue').textContent =
+      (d.cpu_temp_c != null) ? d.cpu_temp_c.toFixed(1) + ' °C' : '—';
+
+    // uptime (seconds -> pretty)
+    if (typeof d.uptime_seconds === 'number') {
+      const s = d.uptime_seconds, days=Math.floor(s/86400),
+            hrs=Math.floor((s%86400)/3600), mins=Math.floor((s%3600)/60);
+      document.getElementById('uptimeValue').textContent = `${days}d ${hrs}h ${mins}m`;
+    } else document.getElementById('uptimeValue').textContent = '—';
+
+    // load 1/5/15
+    if (Array.isArray(d.cpu?.load_avg) && d.cpu.load_avg.length >= 3) {
+      const [l1,l5,l15] = d.cpu.load_avg;
+      document.getElementById('loadValue').textContent =
+        `${l1.toFixed(2)}, ${l5.toFixed(2)}, ${l15.toFixed(2)}`;
+    } else document.getElementById('loadValue').textContent = '—';
+
+    // cpu %, mem %, disk %
+    document.getElementById('cpuValue').textContent =
+      (d.cpu?.percent != null) ? d.cpu.percent.toFixed(0) + '%' : '—';
+    document.getElementById('memValue').textContent =
+      (d.memory?.percent != null) ? d.memory.percent.toFixed(0) + '%' : '—';
+    document.getElementById('diskValue').textContent =
+      (d.disk?.percent != null) ? d.disk.percent.toFixed(0) + '%' : '—';
+  } catch (e) {
+    console.error('refreshStats failed:', e);
+  }
+}
+setInterval(refreshStats, 3000);
+window.addEventListener('load', refreshStats);
+</script>
 </body></html>

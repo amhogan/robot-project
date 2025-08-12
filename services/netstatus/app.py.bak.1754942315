@@ -4,7 +4,7 @@ import time, os, subprocess, psutil
 app = Flask(__name__)
 BOOT_TIME = psutil.boot_time()
 
-# --- CORS so dashboard can call across ports ---
+# CORS for cross-port fetches from the dashboard
 @app.after_request
 def add_cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = "*"
@@ -13,11 +13,8 @@ def add_cors(resp):
     return resp
 
 def read_cpu_temp_c():
-    sysfs_paths = [
-        "/sys/class/thermal/thermal_zone0/temp",
-        "/sys/class/hwmon/hwmon0/temp1_input",
-    ]
-    for p in sysfs_paths:
+    paths = ["/sys/class/thermal/thermal_zone0/temp", "/sys/class/hwmon/hwmon0/temp1_input"]
+    for p in paths:
         try:
             with open(p, "r") as f:
                 raw = f.read().strip()
@@ -41,26 +38,16 @@ def status():
         load_avg = os.getloadavg()
     except Exception:
         load_avg = None
-
     vm = psutil.virtual_memory()
     sm = psutil.swap_memory()
     du = psutil.disk_usage("/")
-
     net = psutil.net_io_counters()
     net_data = {
-        "bytes_sent": net.bytes_sent,
-        "bytes_recv": net.bytes_recv,
-        "packets_sent": net.packets_sent,
-        "packets_recv": net.packets_recv,
-        "errin": net.errin,
-        "errout": net.errout,
-        "dropin": net.dropin,
-        "dropout": net.dropout,
+        "bytes_sent": net.bytes_sent, "bytes_recv": net.bytes_recv,
+        "packets_sent": net.packets_sent, "packets_recv": net.packets_recv,
+        "errin": net.errin, "errout": net.errout, "dropin": net.dropin, "dropout": net.dropout,
     }
-
-    uptime_seconds = max(0, time.time() - BOOT_TIME)
-    cpu_temp_c = read_cpu_temp_c()
-
+    uptime_seconds = int(max(0, time.time() - BOOT_TIME))
     return jsonify({
         "host": os.uname().nodename if hasattr(os, "uname") else "unknown",
         "cpu": {"percent": cpu_percent, "load_avg": load_avg},
@@ -71,8 +58,8 @@ def status():
         },
         "disk": {"path": "/", "total": du.total, "used": du.used, "free": du.free, "percent": du.percent},
         "network": net_data,
-        "uptime_seconds": int(uptime_seconds),
-        "cpu_temp_c": cpu_temp_c
+        "uptime_seconds": uptime_seconds,
+        "cpu_temp_c": read_cpu_temp_c()
     })
 
 @app.route("/status_temp")
@@ -83,24 +70,21 @@ def status_temp():
 def status_uptime():
     return jsonify({"uptime_seconds": int(max(0, time.time() - BOOT_TIME))})
 
-# --- Serve dashboard helper JS from this service ---
+# Serve the JS that populates the dashboard
 NETSTATUS_JS = r"""
 (function(){
   const PORT = 5000; // change to 7070 if you remap
   const BASE = `${location.protocol}//${location.hostname}:${PORT}`;
-
   const $ = id => document.getElementById(id);
   const pct = v => (v!=null ? v.toFixed(1)+'%' : '—');
   const tmp = c => (c!=null ? c.toFixed(1)+'°C' : '—');
   const byt = b => { if (b==null) return '—'; const u=['B','KB','MB','GB','TB']; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++;} return n.toFixed(1)+' '+u[i]; };
   const upt = s => { if (s==null) return '—'; const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60); return `${d}d ${h}h ${m}m`; };
-
   let last=null,lastT=null;
   async function tick(){
     try{
       const r = await fetch(`${BASE}/status`, {cache:'no-store'});
       const data = await r.json();
-
       $('cpuPercent')  && ($('cpuPercent').textContent  = pct(data?.cpu?.percent));
       $('memPercent')  && ($('memPercent').textContent  = pct(data?.memory?.percent));
       $('diskPercent') && ($('diskPercent').textContent = pct(data?.disk?.percent));
@@ -108,7 +92,6 @@ NETSTATUS_JS = r"""
       $('uptime')      && ($('uptime').textContent      = upt(data?.uptime_seconds));
       $('netSent')     && ($('netSent').textContent     = byt(data?.network?.bytes_sent));
       $('netRecv')     && ($('netRecv').textContent     = byt(data?.network?.bytes_recv));
-
       if(last && lastT && data?.network){
         const dt=(Date.now()-lastT)/1000; if(dt>0.5){
           const upBps=(data.network.bytes_sent-last.bytes_sent)/dt;
@@ -118,7 +101,7 @@ NETSTATUS_JS = r"""
           last=data.network; lastT=Date.now();
         }
       } else if(data?.network){ last=data.network; lastT=Date.now(); }
-    }catch(e){ /* optional: show offline */ }
+    }catch(e){ /* optionally show offline */ }
   }
   setInterval(tick, 2000); tick();
 })();
