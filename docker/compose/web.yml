@@ -1,0 +1,28 @@
+name: robot
+
+services:
+  netstatus:
+    build:
+      context: ${PROJECT_ROOT}/services/netstatus
+    restart: unless-stopped
+    expose: ["5000"]
+    networks: [robot-net]
+  video-dashboard:
+    image: nginx:stable
+    restart: unless-stopped
+    ports: ["${DASHBOARD_PORT:-8081}:80"]
+    networks: [robot-net]
+    volumes:
+      - ${PROJECT_ROOT}/site:/usr/share/nginx/html:ro
+      - ${PROJECT_ROOT}/site/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      web-video-server:
+        condition: service_healthy    # wait until /streams works
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  robot-net: {}

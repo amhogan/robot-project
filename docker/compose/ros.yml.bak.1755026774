@@ -1,0 +1,54 @@
+name: robot
+
+services:
+  ros-core:
+    image: ros:iron-ros-core
+    restart: unless-stopped
+  image-test:
+    build:
+      context: ${PROJECT_ROOT}
+      dockerfile: docker/camtest.Dockerfile
+    networks: [robot-net]
+    restart: unless-stopped
+    depends_on:
+      ros-core:
+        condition: service_started
+    networks: [robot-net]
+    command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
+    environment:
+      - ROS_DOMAIN_ID=0
+
+  web-video-server:
+    build:
+      context: ${PROJECT_ROOT}
+      dockerfile: docker/wvs.Dockerfile
+    restart: unless-stopped
+    networks: [robot-net]
+    ports: ["${WVS_PORT:-8080}:8080"]
+    depends_on:
+      ros-core:
+        condition: service_started
+    environment:
+      - ROS_DOMAIN_ID=0
+
+  v4l2-camera:
+    build:
+      context: ${PROJECT_ROOT}
+      dockerfile: docker/v4l2.Dockerfile
+    restart: unless-stopped
+    networks: [robot-net]
+    depends_on:
+      ros-core:
+        condition: service_started
+    environment:
+      - ROS_DOMAIN_ID=0
+      - CAM_DEV=${CAM_DEV:-/dev/video21}   # set CAM_DEV in .env
+    devices:
+      - "${CAM_DEV:-/dev/video21}:${CAM_DEV:-/dev/video21}"
+    device_cgroup_rules:
+      - 'c 81:* rmw'    # allow /dev/video* (video4linux major 81) read/write/mknod
+    group_add:
+      - "video"
+
+networks:
+  robot-net: {}

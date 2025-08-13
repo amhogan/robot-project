@@ -1,15 +1,6 @@
 FROM python:3.11-slim
-
-# Add minimal build chain so psutil can compile on aarch64
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app.py .
-
+RUN pip install --no-cache-dir flask psutil
+COPY app.py /app/app.py
 EXPOSE 5000
-CMD ["python", "app.py"]
+CMD ["python","/app/app.py"]

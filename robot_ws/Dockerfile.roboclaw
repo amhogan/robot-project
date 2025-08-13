@@ -1,0 +1,18 @@
+FROM ros:iron-ros-base
+
+# Install Python build tools
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-colcon-common-extensions \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the entire source tree — not just one package
+COPY ./src /ros2_ws/src
+
+WORKDIR /ros2_ws
+
+# Build only roboclaw_driver package
+RUN . /opt/ros/iron/setup.sh && colcon build --packages-select roboclaw_driver
+
+# Start the node
+CMD ["bash", "-c", "source /opt/ros/iron/setup.bash && source install/setup.bash && ros2 run roboclaw_driver roboclaw_driver"]

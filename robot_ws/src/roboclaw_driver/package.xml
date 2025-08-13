@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>roboclaw_driver</name>
+  <version>0.1.0</version>
+  <description>Roboclaw driver for ROS 2</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>roboclaw</exec_depend> <!-- If using external roboclaw lib -->
+
+</package>

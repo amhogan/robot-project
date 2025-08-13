@@ -1,0 +1,13 @@
+name: robot
+services:
+  image-test:
+    build:
+      context: ${PROJECT_ROOT}
+      dockerfile: docker/camtest.Dockerfile
+    restart: unless-stopped
+    networks: [robot-net]
+    depends_on:
+      ros-core:
+        condition: service_started
+networks:
+  robot-net: {}

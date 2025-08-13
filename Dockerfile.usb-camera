@@ -1,0 +1,20 @@
+# Dockerfile.usb-camera
+FROM ros:iron-perception
+
+# Install image_tools package
+RUN apt-get update && apt-get install -y \
+    ros-iron-image-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up workspace
+COPY ./ros2_ws /ros2_ws
+WORKDIR /ros2_ws
+
+# Build any local packages (optional — leave as is even if empty)
+RUN . /opt/ros/iron/setup.sh && \
+    colcon build && \
+    echo 'source /opt/ros/iron/setup.bash' >> ~/.bashrc && \
+    echo 'source /ros2_ws/install/setup.bash' >> ~/.bashrc
+
+# Start the USB camera node using cam2image
+CMD ["bash", "-c", "source /opt/ros/iron/setup.bash && source /ros2_ws/install/setup.bash && ros2 run image_tools cam2image --ros-args -r image:=/camera/image_raw"]

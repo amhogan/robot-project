@@ -1,132 +1,28 @@
-from flask import Flask, jsonify, Response
-import time, os, subprocess, psutil
-
+from flask import Flask, jsonify
+import psutil, time, os
 app = Flask(__name__)
-BOOT_TIME = psutil.boot_time()
-
-# --- CORS so dashboard can call across ports ---
-@app.after_request
-def add_cors(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "*"
-    return resp
-
-def read_cpu_temp_c():
-    sysfs_paths = [
-        "/sys/class/thermal/thermal_zone0/temp",
-        "/sys/class/hwmon/hwmon0/temp1_input",
-    ]
-    for p in sysfs_paths:
-        try:
-            with open(p, "r") as f:
-                raw = f.read().strip()
-                val = float(raw) / (1000.0 if len(raw) > 3 else 1.0)
-                if 0 < val < 120:
-                    return val
-        except Exception:
-            pass
+@app.get("/status")
+def status():
+    la = os.getloadavg() if hasattr(os, "getloadavg") else (0,0,0)
+    vm = psutil.virtual_memory(); du = psutil.disk_usage('/')
+    return jsonify({
+        "cpu":{"percent": psutil.cpu_percent(interval=0.1), "load_avg": la},
+        "memory":{"total": vm.total, "used": vm.used},
+        "disk":{"total": du.total, "used": du.used},
+        "uptime_seconds": time.time() - psutil.boot_time()
+    })
+@app.get("/status_temp")
+def status_temp():
+    temp = None
     try:
-        out = subprocess.check_output(["vcgencmd", "measure_temp"], text=True).strip()
-        if "temp=" in out:
-            return float(out.split("temp=")[1].split("'")[0])
+        temps = psutil.sensors_temperatures()
+        for k in temps:
+            for t in temps[k]:
+                if hasattr(t,'current') and t.current:
+                    temp = t.current; break
+            if temp: break
     except Exception:
         pass
-    return None
-
-@app.route("/status")
-def status():
-    cpu_percent = psutil.cpu_percent(interval=0.2)
-    try:
-        load_avg = os.getloadavg()
-    except Exception:
-        load_avg = None
-
-    vm = psutil.virtual_memory()
-    sm = psutil.swap_memory()
-    du = psutil.disk_usage("/")
-
-    net = psutil.net_io_counters()
-    net_data = {
-        "bytes_sent": net.bytes_sent,
-        "bytes_recv": net.bytes_recv,
-        "packets_sent": net.packets_sent,
-        "packets_recv": net.packets_recv,
-        "errin": net.errin,
-        "errout": net.errout,
-        "dropin": net.dropin,
-        "dropout": net.dropout,
-    }
-
-    uptime_seconds = max(0, time.time() - BOOT_TIME)
-    cpu_temp_c = read_cpu_temp_c()
-
-    return jsonify({
-        "host": os.uname().nodename if hasattr(os, "uname") else "unknown",
-        "cpu": {"percent": cpu_percent, "load_avg": load_avg},
-        "memory": {
-            "total": vm.total, "available": vm.available, "used": vm.used,
-            "free": vm.free, "percent": vm.percent,
-            "swap_total": sm.total, "swap_used": sm.used, "swap_percent": sm.percent
-        },
-        "disk": {"path": "/", "total": du.total, "used": du.used, "free": du.free, "percent": du.percent},
-        "network": net_data,
-        "uptime_seconds": int(uptime_seconds),
-        "cpu_temp_c": cpu_temp_c
-    })
-
-@app.route("/status_temp")
-def status_temp():
-    return jsonify({"cpu_temp_c": read_cpu_temp_c()})
-
-@app.route("/status_uptime")
-def status_uptime():
-    return jsonify({"uptime_seconds": int(max(0, time.time() - BOOT_TIME))})
-
-# --- Serve dashboard helper JS from this service ---
-NETSTATUS_JS = r"""
-(function(){
-  const PORT = 5000; // change to 7070 if you remap
-  const BASE = `${location.protocol}//${location.hostname}:${PORT}`;
-
-  const $ = id => document.getElementById(id);
-  const pct = v => (v!=null ? v.toFixed(1)+'%' : '—');
-  const tmp = c => (c!=null ? c.toFixed(1)+'°C' : '—');
-  const byt = b => { if (b==null) return '—'; const u=['B','KB','MB','GB','TB']; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++;} return n.toFixed(1)+' '+u[i]; };
-  const upt = s => { if (s==null) return '—'; const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60); return `${d}d ${h}h ${m}m`; };
-
-  let last=null,lastT=null;
-  async function tick(){
-    try{
-      const r = await fetch(`${BASE}/status`, {cache:'no-store'});
-      const data = await r.json();
-
-      $('cpuPercent')  && ($('cpuPercent').textContent  = pct(data?.cpu?.percent));
-      $('memPercent')  && ($('memPercent').textContent  = pct(data?.memory?.percent));
-      $('diskPercent') && ($('diskPercent').textContent = pct(data?.disk?.percent));
-      $('cpuTemp')     && ($('cpuTemp').textContent     = tmp(data?.cpu_temp_c));
-      $('uptime')      && ($('uptime').textContent      = upt(data?.uptime_seconds));
-      $('netSent')     && ($('netSent').textContent     = byt(data?.network?.bytes_sent));
-      $('netRecv')     && ($('netRecv').textContent     = byt(data?.network?.bytes_recv));
-
-      if(last && lastT && data?.network){
-        const dt=(Date.now()-lastT)/1000; if(dt>0.5){
-          const upBps=(data.network.bytes_sent-last.bytes_sent)/dt;
-          const dnBps=(data.network.bytes_recv-last.bytes_recv)/dt;
-          $('netUpRate')   && ($('netUpRate').textContent   = byt(upBps)+'/s');
-          $('netDownRate') && ($('netDownRate').textContent = byt(dnBps)+'/s');
-          last=data.network; lastT=Date.now();
-        }
-      } else if(data?.network){ last=data.network; lastT=Date.now(); }
-    }catch(e){ /* optional: show offline */ }
-  }
-  setInterval(tick, 2000); tick();
-})();
-"""
-
-@app.route("/netstatus.js")
-def netstatus_js():
-    return Response(NETSTATUS_JS, mimetype="application/javascript")
-
+    return jsonify({"cpu_temp_c": temp})
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

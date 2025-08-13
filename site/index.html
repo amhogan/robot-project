@@ -1,96 +1,238 @@
-<!doctype html><html lang="en"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Robot Dashboard</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;margin:0;background:#0b0f14;color:#e8f0f6}
-header{padding:16px 20px;border-bottom:1px solid #1c2530;background:#0f141b}
-.wrap{max-width:1080px;margin:0 auto;padding:16px 20px}
-.grid{display:grid;gap:16px;grid-template-columns:1.2fr 0.8fr}
-.card{background:#0f141b;border:1px solid #1c2530;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-.title{font-size:18px;margin:0 0 10px 0;color:#9ec3ff}
-.kv{display:flex;justify-content:space-between;margin:6px 0}.kv span{opacity:.8}
-.video{width:100%;height:auto;border-radius:10px;background:#111}
-.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-@media (max-width:900px){.grid{grid-template-columns:1fr}}
-</style>
-</head><body>
-<header><strong>RPi-Robot Dashboard</strong></header>
-<div class="wrap">
-  <div class="grid">
-    <div class="card">
-      <h3 class="title">Camera</h3>
-      <img id="stream" class="video" src="/mjpeg" alt="Robot Video Stream"/>
-    </div>
-    <div class="card">
-      <h3 class="title">System Status</h3>
-      <div class="kv"><span>CPU Temp</span><strong id="cpuTemp">â€”</strong></div>
-      <div class="kv"><span>Uptime</span><strong id="uptime">â€”</strong></div>
-      <hr style="border:0;border-top:1px solid #1c2530;margin:10px 0"/>
-      <div class="kv"><span>Load</span><strong id="load">â€”</strong></div>
-      <div class="kv"><span>CPU %</span><strong id="cpu">â€”</strong></div>
-      <div class="kv"><span>Mem</span><strong id="mem">â€”</strong></div>
-      <div class="kv"><span>Disk</span><strong id="disk">â€”</strong></div>
-      <details style="margin-top:10px"><summary>Raw status</summary>
-        <pre id="raw" class="mono" style="white-space:pre-wrap"></pre>
-      </details>
-    </div>
-  </div>
-</div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Robot Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f1220; --fg:#e9ecf1; --muted:#9aa3b2; --card:#171a2b; --accent:#66d9ef; --ok:#2ecc71; --warn:#f1c40f; --bad:#e74c3c; }
+    html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    header { padding:16px 20px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #1f2236; }
+    header h1 { margin:0; font-size:20px; font-weight:600; letter-spacing:.2px; }
+    .sub { color:var(--muted); font-size:13px; }
+    main { padding:20px; max-width:1200px; margin:0 auto; display:grid; grid-template-columns: 2fr 1fr; gap:20px; }
+    .card { background:var(--card); border:1px solid #222743; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.25); }
+    .card h2 { margin:0; padding:14px 16px; font-size:15px; border-bottom:1px solid #1f2236; color:#c9d1e1; }
+    .card .body { padding:14px 16px; }
+    #videoWrap { display:flex; align-items:center; justify-content:center; background:#0c0f1c; border-bottom-left-radius:16px; border-bottom-right-radius:16px; overflow:hidden; }
+    #camera { width:100%; height:auto; display:block; background:#000; }
+    .row { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+    .stat { background:#0f1326; border:1px dashed #263056; border-radius:12px; padding:12px; }
+    .stat .label { color:var(--muted); font-size:12px; margin-bottom:6px; }
+    .stat .value { font-size:20px; font-weight:600; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #2b335c; color:#b7c1d6; font-size:12px; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    select, button { background:#0e1230; color:var(--fg); border:1px solid #2a3569; border-radius:10px; padding:8px 10px; font-size:14px; }
+    button:hover, select:hover { border-color:#3b4a8e; cursor:pointer; }
+    .kv { display:grid; grid-template-columns: 140px 1fr; gap:6px; margin-top:8px; }
+    a { color:var(--accent); text-decoration:none; }
+    footer { padding:12px 20px; color:var(--muted); font-size:12px; border-top:1px solid #1f2236; text-align:center; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Robot Dashboard</h1>
+    <span class="sub">Live camera + system status (no hardcoded IPs)</span>
+    <span class="pill" id="net-pill">iface: <span id="iface">detecting…</span></span>
+  </header>
+
+  <main>
+    <!-- Video panel -->
+    <section class="card" style="grid-column: 1 / span 1;">
+      <h2>Camera</h2>
+      <div class="body">
+        <div class="controls">
+          <label for="topic">Topic:</label>
+          <select id="topic">
+            <option value="/image_raw">/image_raw</option>
+            <option value="/camera/image_raw">/camera/image_raw</option>
+          </select>
+          <label for="quality">Quality:</label>
+          <select id="quality">
+            <option value="80">80</option>
+            <option value="70">70</option>
+            <option value="60">60</option>
+            <option value="90">90</option>
+          </select>
+          <button id="apply">Apply</button>
+          <span class="sub">via <code class="mono">/ros/stream</code></span>
+        </div>
+      </div>
+      <div id="videoWrap">
+        <!-- IMPORTANT: proxied path; no IPs -->
+        <img id="camera" src="/ros/stream?topic=/image_raw&type=mjpeg&quality=80">
+      </div>
+      <div class="body">
+        <div class="kv">
+          <div class="sub">Current URL</div>
+          <div class="mono" id="cam-url">/ros/stream?topic=/image_raw&type=mjpeg&quality=80</div>
+          <div class="sub">Last refresh</div>
+          <div class="mono" id="cam-refresh">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats panel -->
+    <section class="card" style="grid-column: 2 / span 1;">
+      <h2>System Status</h2>
+      <div class="body">
+        <div class="row">
+          <div class="stat">
+            <div class="label">CPU Temp</div>
+            <div class="value mono" id="cpu-temp">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Uptime</div>
+            <div class="value mono" id="uptime">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Status JSON</div>
+            <div class="value mono" id="status-mini">—</div>
+          </div>
+        </div>
+
+        <div class="kv" style="margin-top:12px">
+          <div class="sub">/status</div>
+          <div><code class="mono"><a href="/status" target="_blank" rel="noopener">/status</a></code></div>
+          <div class="sub">/status_temp</div>
+          <div><code class="mono"><a href="/status_temp" target="_blank" rel="noopener">/status_temp</a></code></div>
+          <div class="sub">/status_uptime</div>
+          <div><code class="mono"><a href="/status_uptime" target="_blank" rel="noopener">/status_uptime</a></code></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Help panel -->
+    <section class="card" style="grid-column: 1 / span 2;">
+      <h2>Notes</h2>
+      <div class="body">
+        <ul>
+          <li>Video is proxied through Nginx at <code class="mono">/ros/</code> ? <code class="mono">robot-web-video-server-1:8080</code>. No IPs needed; works on eth0 or wlan0.</li>
+          <li>Default topic is <code class="mono">/image_raw</code>. If you switch your publisher, use the Topic dropdown and click <b>Apply</b>.</li>
+          <li>Endpoints <code class="mono">/status</code>, <code class="mono">/status_temp</code>, <code class="mono">/status_uptime</code> are served by the dashboard stack.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © Robot Project · <span id="now" class="mono"></span>
+  </footer>
+
+  <script>
+    const img = document.getElementById('camera');
+    const topicSel = document.getElementById('topic');
+    const qualitySel = document.getElementById('quality');
+    const applyBtn = document.getElementById('apply');
+    const camUrl = document.getElementById('cam-url');
+    const camRefresh = document.getElementById('cam-refresh');
+    const ifaceEl = document.getElementById('iface');
+
+    function setImg(topic, quality) {
+      const url = `/ros/stream?topic=${encodeURIComponent(topic)}&type=mjpeg&quality=${encodeURIComponent(quality)}`;
+      img.src = url + `&_=${Date.now()}`; // cache-buster to force reload
+      camUrl.textContent = url;
+      camRefresh.textContent = new Date().toLocaleString();
+    }
+
+    applyBtn.addEventListener('click', () => setImg(topicSel.value, qualitySel.value));
+
+    // Basic “interface” hint based on current host (best-effort)
+    (function detectIface() {
+      // If you expose which iface is active in /status, prefer that.
+      fetch('/status').then(r => r.json()).then(js => {
+        ifaceEl.textContent = js.active_interface || js.iface || 'unknown';
+      }).catch(() => {
+        // fallback only shows host we’re hitting
+        ifaceEl.textContent = location.host || 'unknown';
+      });
+    })();
+
+    // Status tiles
 <script>
-const fmtUp=s=>{s=+s||0;const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return (d?d+'d ':'')+h+'h '+m+'m'};
-async function tick(){
-  try{
-    const r=await fetch('/api/netstatus',{cache:'no-store'});
-    if(!r.ok) throw new Error(r.status);
-    const s=await r.json();
-    document.getElementById('cpuTemp').textContent=(parseFloat(s.cpu_temp_c)||0).toFixed(1)+' Â°C';
-    document.getElementById('uptime').textContent = s.uptime_hms || fmtUp(s.uptime_seconds);
-    document.getElementById('load').textContent   = s.load_1 ?? 'â€”';
-    document.getElementById('cpu').textContent    = s.cpu_percent ?? 'â€”';
-    document.getElementById('mem').textContent    = s.mem_used ?? (s.mem_used_mb&&s.mem_total_mb?`${s.mem_used_mb}MB/${s.mem_total_mb}MB`:'â€”');
-    document.getElementById('disk').textContent   = s.disk_used ?? (s.disk_used_gb&&s.disk_total_gb?`${s.disk_used_gb}GB/${s.disk_total_gb}GB`:'â€”');
-    document.getElementById('raw').textContent    = JSON.stringify(s,null,2);
-  }catch(e){}finally{ setTimeout(tick,2000); }
-}
-tick();
-</script>
-<script>
-async function refreshStats() {
-  try {
-    const r = await fetch('/status');
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
+  // ... keep the rest of the script above as-is
 
-    // temp
-    document.getElementById('tempValue').textContent =
-      (d.cpu_temp_c != null) ? d.cpu_temp_c.toFixed(1) + ' °C' : '—';
+  const elTemp = document.getElementById('cpu-temp');
+  const elUptime = document.getElementById('uptime');
+  const elMini = document.getElementById('status-mini');
+  const nowEl = document.getElementById('now');
 
-    // uptime (seconds -> pretty)
-    if (typeof d.uptime_seconds === 'number') {
-      const s = d.uptime_seconds, days=Math.floor(s/86400),
-            hrs=Math.floor((s%86400)/3600), mins=Math.floor((s%3600)/60);
-      document.getElementById('uptimeValue').textContent = `${days}d ${hrs}h ${mins}m`;
-    } else document.getElementById('uptimeValue').textContent = '—';
-
-    // load 1/5/15
-    if (Array.isArray(d.cpu?.load_avg) && d.cpu.load_avg.length >= 3) {
-      const [l1,l5,l15] = d.cpu.load_avg;
-      document.getElementById('loadValue').textContent =
-        `${l1.toFixed(2)}, ${l5.toFixed(2)}, ${l15.toFixed(2)}`;
-    } else document.getElementById('loadValue').textContent = '—';
-
-    // cpu %, mem %, disk %
-    document.getElementById('cpuValue').textContent =
-      (d.cpu?.percent != null) ? d.cpu.percent.toFixed(0) + '%' : '—';
-    document.getElementById('memValue').textContent =
-      (d.memory?.percent != null) ? d.memory.percent.toFixed(0) + '%' : '—';
-    document.getElementById('diskValue').textContent =
-      (d.disk?.percent != null) ? d.disk.percent.toFixed(0) + '%' : '—';
-  } catch (e) {
-    console.error('refreshStats failed:', e);
+  function fmtUptime(sec) {
+    if (!Number.isFinite(sec)) return '—';
+    const d = Math.floor(sec / 86400);
+    sec -= d*86400;
+    const h = Math.floor(sec / 3600);
+    sec -= h*3600;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec - m*60);
+    const parts = [];
+    if (d) parts.push(`${d}d`);
+    if (h || parts.length) parts.push(`${h}h`);
+    if (m || parts.length) parts.push(`${m}m`);
+    parts.push(`${s}s`);
+    return parts.join(' ');
   }
-}
-setInterval(refreshStats, 3000);
-window.addEventListener('load', refreshStats);
+
+  async function smartFetch(url, expectJson=false) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+    return expectJson ? r.json() : r.text();
+  }
+
+  async function refreshStatus() {
+    nowEl.textContent = new Date().toLocaleString();
+    try {
+      // Try dedicated endpoints first
+      const [tempR, upR, statR] = await Promise.allSettled([
+        smartFetch('/status_temp'),            // may be raw text or JSON
+        smartFetch('/status_uptime'),          // may be raw seconds
+        smartFetch('/status', true)            // JSON
+      ]);
+
+      // CPU Temp
+      if (tempR.status === 'fulfilled') {
+        let t = tempR.value;
+        let c = null;
+        try {
+          const obj = JSON.parse(String(t));
+          c = obj.cpu_temp_c ?? obj.temp_c ?? obj.cpuTempC ?? null;
+        } catch {
+          const num = parseFloat(String(t));
+          if (Number.isFinite(num)) c = num;
+        }
+        elTemp.textContent = (c !== null) ? `${c.toFixed(2)}°C` : String(t).trim();
+      }
+
+      // Uptime
+      if (upR.status === 'fulfilled') {
+        const txt = String(upR.value).trim();
+        const n = parseFloat(txt);
+        elUptime.textContent = Number.isFinite(n) ? fmtUptime(n) : txt;
+      } else if (statR.status === 'fulfilled') {
+        // Fallback: some backends embed uptime in /status
+        const js = statR.value;
+        const u = js.uptime_sec ?? js.uptime ?? (js.system && js.system.uptime);
+        if (Number.isFinite(u)) elUptime.textContent = fmtUptime(Number(u));
+      }
+
+      // Status mini
+      if (statR.status === 'fulfilled') {
+        const js = statR.value;
+        const pick = {};
+        for (const k of ['cpu','mem','disk','iface','active_interface','uptime','uptime_sec']) {
+          if (k in js) pick[k] = js[k];
+        }
+        elMini.textContent = Object.keys(pick).length ? JSON.stringify(pick) : 'ok';
+      }
+    } catch (_) {
+      // keep last values
+    }
+  }
+
+  setInterval(refreshStatus, 5000);
+  refreshStatus();
 </script>
-</body></html>
+ 
+</body>
+</html>

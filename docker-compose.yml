@@ -1,0 +1,139 @@
+version: "3.9"
+
+# Robot stack with camera streaming via ROS web_video_server and nginx proxy.
+# Save as docker-compose.yml and run: docker compose up -d
+# Folders expected on the host (create them if they don't exist):
+#   ./nginx/conf.d/            -> holds nginx site configs (place robot-mjpeg.conf here)
+#   ./site/                    -> your dashboard files (index.html, assets, etc.)
+
+networks:
+  robotnet:
+    driver: bridge
+
+services:
+  # -----------------------------
+  # Web dashboard + reverse proxy (nginx)
+  # -----------------------------
+  video-dashboard:
+    image: nginx:alpine
+    container_name: video-dashboard
+    restart: unless-stopped
+    ports:
+      - "8081:80"             # external dashboard/stream access
+    volumes:
+      - /home/pi/robot-project/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /home/pi/robot-project/site:/usr/share/nginx/html:ro
+    networks:
+      - robotnet
+    depends_on:
+      - web-video-server
+
+  # -----------------------------
+  # ROS web_video_server (serves MJPEG stream)
+  # -----------------------------
+  web-video-server:
+    image: robot-docker-web-video-server
+    container_name: web-video-server
+    restart: unless-stopped
+    # Publishes internal 8080 to the host so the dashboard can connect directly if desired.
+    ports:
+      - "8080:8080"
+    networks:
+      - robotnet
+    # If your build needs ROS networking env vars, add them here.
+    # environment:
+    #   - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    #   - ROS_DOMAIN_ID=0
+    depends_on:
+      - ros-core
+      - usb-camera
+
+  # -----------------------------
+  # ROS core
+  # -----------------------------
+  ros-core:
+    image: robot-docker-ros-core
+    container_name: ros-core
+    restart: unless-stopped
+    networks:
+      - robotnet
+
+  # -----------------------------
+  # USB camera publisher
+  # -----------------------------
+  usb-camera:
+    image: robot-docker-usb-camera
+    container_name: usb-camera
+    restart: unless-stopped
+    # Ensure the camera device is accessible inside the container.
+    # Update /dev/video0 as appropriate for your hardware.
+    devices:
+      - "/dev/video0:/dev/video0"
+    networks:
+      - robotnet
+    depends_on:
+      - ros-core
+
+  # -----------------------------
+  # Roboclaw driver node
+  # -----------------------------
+  roboclaw-driver:
+    image: robot-docker-roboclaw-driver
+    container_name: roboclaw-driver
+    restart: unless-stopped
+    # If Roboclaw is on USB CDC/ACM, expose it here (adjust to your device path).
+    # devices:
+    #   - "/dev/ttyACM0:/dev/ttyACM0"
+    networks:
+      - robotnet
+    depends_on:
+      - ros-core
+
+  # -----------------------------
+  # Optional: OpenCV node
+  # -----------------------------
+  opencv-node:
+    image: robot-docker-opencv-node
+    container_name: opencv-node
+    restart: unless-stopped
+    networks:
+      - robotnet
+    depends_on:
+      - ros-core
+
+  # -----------------------------
+  # Optional: simple netstatus service (no ports exposed)
+  # -----------------------------
+  netstatus:
+    build:
+      context: ./services/netstatus
+    container_name: netstatus
+    restart: unless-stopped
+    pid: "host"
+    ports:
+      - "7070:5000"   # host:container
+    volumes:
+      - /sys/class/thermal:/sys/class/thermal:ro
+
+  # -----------------------------
+  # Optional: SSH server (linuxserver/openssh-server)
+  # -----------------------------
+  ssh-server:
+    image: ghcr.io/linuxserver/openssh-server
+    container_name: ssh-server
+    restart: unless-stopped
+    # Expose if you plan to connect externally (map as needed):
+    # ports:
+    #   - "2222:2222"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ssh_config:/config
+    networks:
+      - robotnet
+
+volumes:
+  portainer_data:
+  ssh_config:

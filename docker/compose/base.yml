@@ -1,0 +1,9 @@
+name: robot
+
+services: {}
+
+networks:
+  robot-net: {}
+
+volumes:
+  robot-data: {}
