@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot Dashboard (Hotfix)</title>
+<style>
+  body{font-family:system-ui,Arial,sans-serif;background:#111;color:#eaeaea;margin:0;padding:16px}
+  h1{margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .card{background:#1b1b1b;border-radius:12px;padding:12px}
+  label,select,button{font-size:14px;margin-right:8px}
+  img{max-width:100%;border-radius:8px;background:#000;display:block}
+  #cur{font-family:ui-monospace,Menlo,Consolas,monospace;color:#9aa3b2;word-break:break-all}
+</style>
+<h1>Robot Dashboard</h1>
+
+<div class="grid">
+  <div class="card">
+    <h2>Video</h2>
+    <div style="margin-bottom:8px">
+      <label>Topic
+        <select id="topic">
+          <option value="/image_raw">/image_raw</option>
+          <option value="/camera/image_raw">/camera/image_raw</option>
+        </select>
+      </label>
+      <label>Quality
+        <select id="quality">
+          <option>80</option><option>70</option><option>60</option><option>90</option>
+        </select>
+      </label>
+      <button id="apply">Apply</button>
+    </div>
+    <div id="cur"></div>
+    <img id="video" alt="video stream">
+  </div>
+
+  <div class="card">
+    <h2>Telemetry</h2>
+    <div>CPU Temp: <span id="cpuTemp">—</span></div>
+    <div>Uptime: <span id="uptime">—</span></div>
+    <div>Status JSON: <span id="statusMini">—</span></div>
+  </div>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const img=$('video'), topic=$('topic'), q=$('quality'), cur=$('cur');
+
+  function setSrc(){
+    const u=`/ros/stream?topic=${encodeURIComponent(topic.value)}&type=mjpeg&quality=${encodeURIComponent(q.value)}`;
+    img.src = u + `&_=${Date.now()}`; // bust cache each Apply
+    cur.textContent = u;
+  }
+  $('apply').onclick=setSrc;
+  setSrc();
+
+  function fmtUptime(s){
+    s=+s; if(!isFinite(s)) return '—';
+    const d=Math.floor(s/86400); s-=d*86400;
+    const h=Math.floor(s/3600); s-=h*3600;
+    const m=Math.floor(s/60);   s-=m*60;
+    return `${d?d+'d ':''}${h}h ${m}m ${Math.floor(s)}s`;
+  }
+  async function j(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error(u+':'+r.status); return r.json(); }
+
+  async function tick(){
+    try{
+      const [st,tmp]=await Promise.allSettled([ j('/status'), j('/status_temp') ]);
+      if(st.status==='fulfilled'){
+        const js=st.value;
+        const up = js.uptime_seconds ?? js.uptime_sec ?? js.uptime ?? js?.system?.uptime;
+        $('uptime').textContent = fmtUptime(up);
+        $('statusMini').textContent = JSON.stringify({
+          cpu: js.cpu?.percent,
+          mem_used: js.memory?.used,
+          disk_used: js.disk?.used
+        });
+      }
+      if(tmp.status==='fulfilled'){
+        const c = tmp.value.cpu_temp_c ?? tmp.value.temp_c ?? null;
+        $('cpuTemp').textContent = (c!=null) ? ((c.toFixed?c.toFixed(1):c)+' °C') : '—';
+      }
+    }catch(e){ /* keep last values */ }
+  }
+  tick(); setInterval(tick, 5000);
+</script>

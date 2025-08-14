@@ -21,7 +21,13 @@ services:
         condition: service_started
     environment:
       - ROS_DOMAIN_ID=0
-
+    healthcheck:
+      # Succeeds as soon as something is listening on :8080 (no reliance on /streams)
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
   v4l2-camera:
     image: ros:iron-ros-base
     container_name: v4l2-camera
@@ -51,8 +57,8 @@ services:
           --ros-args
           -p video_device:=${CAM_DEV}
           -p image_size:=[640,480]
-          -p framerate:=15.0
-          -p pixel_format:=YUYV
+          -p frame_rate:=15.0
+          -p pixel_format:=MJPG
           -p output_encoding:=rgb8
           -r image:=/image_raw
 
