@@ -1,3 +1,8 @@
+# 1) Backup the broken file
+cp docker/compose/web.yml docker/compose/web.yml.bad.$(date +%s) || true
+
+# 2) Write a minimal, known-good version (spaces only; no tabs/CRLF)
+cat > docker/compose/web.yml <<'YML'
 services:
   netstatus:
     build:
@@ -32,3 +37,10 @@ services:
 
 networks:
   robot-net: {}
+YML
+
+# 3) Strip any stray CRLF (in case your editor added them)
+sed -i 's/\r$//' docker/compose/web.yml
+
+# 4) Sanity check for tabs (should return nothing)
+grep -nP '\t' docker/compose/web.yml || true

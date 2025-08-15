@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot Dashboard</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+  .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  label { font-weight: 600; }
+  img#mjpeg { max-width: 100%; width: 640px; height: auto; display:block; margin-top:1rem; }
+  code { user-select: all; }
+</style>
+<h1>Robot Dashboard</h1>
+
+<section>
+  <h2>Video</h2>
+  <div class="row">
+    <label for="topic">Topic</label>
+    <select id="topic">
+      <option value="/image_raw" selected>/image_raw</option>
+      <option value="/camera/image_raw">/camera/image_raw</option>
+    </select>
+
+    <label for="quality">Quality</label>
+    <input id="quality" type="number" min="1" max="100" step="1" value="80" />
+
+    <button id="apply">Apply</button>
+  </div>
+
+  <!-- Fallback img so video shows even if JS is blocked -->
+  <img id="mjpeg" alt="Live camera"
+       src="http://10.22.22.35:8080/stream?topic=%2Fimage_rawsrc="http://10.22.22.35:8080/stream?topic=%2Fimage_raw/stream?topic=%2Fimage_raw&type=mjpeg&quality=80type=mjpeg/stream?topic=%2Fimage_raw&type=mjpeg&quality=80quality=80"type=mjpegsrc="/stream?topic=%2Fimage_raw&type=mjpeg&quality=80"quality=80" />
+
+  <div style="margin-top:.5rem">
+    <small>URL:</small> <code id="stream-url">http://10.22.22.35:8080/stream?topic=%2Fimage_raw/stream?topic=%2Fimage_raw&type=mjpeg&quality=80type=mjpeg/stream?topic=%2Fimage_raw&type=mjpeg&quality=80quality=80</code>
+  </div>
+</section>
+
+<script>
+  function buildUrl(topic, quality) {
+    return `/stream?topic=${encodeURIComponent(topic)}&type=mjpeg&quality=${encodeURIComponent(quality)}`;
+  }
+  function apply() {
+    const topic = document.getElementById('topic').value || '/image_raw';
+    const q = document.getElementById('quality').value || 80;
+    const u = buildUrl(topic, q);
+    const img = document.getElementById('mjpeg');
+    const out = document.getElementById('stream-url');
+    if (out) out.textContent = u;
+    // add cache buster so changes take effect immediately
+    img.src = u + `&ts=${Date.now()}`;
+  }
+  document.getElementById('apply').addEventListener('click', (e) => { e.preventDefault(); apply(); });
+  document.addEventListener('DOMContentLoaded', apply);
+</script>
+</html>

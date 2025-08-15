@@ -24,6 +24,13 @@
 
 
 ## ✅ Completed Since Last Update
+- 2025-08-14 – CHECK FAIL: Web Video Server streams not reachable at http://localhost:8080/streams.
+- 2025-08-14 – CHECK PASS: Netstatus via Nginx reachable at http://localhost:8081/status.
+- 2025-08-14 – CHECK PASS: Dashboard root reachable at http://localhost:8081/.
+- 2025-08-14 – Added convenience links: `/home/pi/robot-docker.new` and `/home/pi/robot-dashboard.new`.
+- 2025-08-14 – Consolidated repos into `/home/pi/robot-project` monorepo layout.
+- 2025-08-14 – Migrated ROS 2 workspace: `/home/pi/robot-docker/robot_ws` → `/home/pi/robot-project/robot_ws`.
+- 2025-08-14 – Migrated dashboard static files: `/home/pi/robot-dashboard` → `/home/pi/robot-project/site`.
 - 2025-08-12 – CHECK FAIL: Web Video Server streams not reachable at http://localhost:8080/streams.
 - 2025-08-12 – CHECK PASS: Netstatus via Nginx reachable at http://localhost:8081/status.
 - 2025-08-12 – CHECK PASS: Dashboard root reachable at http://localhost:8081/.

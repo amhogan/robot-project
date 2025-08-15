@@ -1,0 +1,19 @@
+services:
+  usb-camera:
+    devices:
+      - /dev/video0:/dev/video0
+    command:
+      - bash
+      - -lc
+      - |
+        set -eo pipefail
+        source /opt/ros/iron/setup.bash
+        echo "[usb-camera] Launching with pixel_format=mjpeg2rgb"
+        exec ros2 run usb_cam usb_cam_node_exe --ros-args \
+          -p video_device:=/dev/video0 \
+          -p framerate:=15.0 \
+          -p image_width:=640 \
+          -p image_height:=480 \
+          -p io_method:=mmap \
+          -p pixel_format:=mjpeg2rgb \
+          -r __node:=usb_cam

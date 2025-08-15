@@ -7,7 +7,7 @@ services:
     networks: [robot-net]
     command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
     environment:
-      - ROS_DOMAIN_ID=0
+      ROS_DOMAIN_ID: "0"
 
   web-video-server:
     build:
@@ -21,7 +21,7 @@ services:
       ros-core:
         condition: service_started
     environment:
-      - ROS_DOMAIN_ID=0
+      ROS_DOMAIN_ID: "0"
     healthcheck:
       test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
       interval: 10s
@@ -32,7 +32,7 @@ services:
   usb-camera:
     build:
       context: ${PROJECT_ROOT}
-      dockerfile: Dockerfile.usb-camera
+      dockerfile: docker/Dockerfile.usb-camera
     image: robot-usb-camera
     container_name: usb-camera
     restart: unless-stopped
@@ -42,15 +42,11 @@ services:
         condition: service_started
     devices:
       - "${CAM_DEV}:${CAM_DEV}"
-    group_add: ["video"]
+    group_add:
+      - "video"
     environment:
-      - ROS_DOMAIN_ID=0
-      - CAM_DEV=${CAM_DEV}
-      - IMAGE_WIDTH=640
-      - IMAGE_HEIGHT=480
-      - FRAME_RATE=15.0         # float to satisfy usb_cam
-      - PIXEL_FORMAT=mjpeg
-      - IO_METHOD=mmap
+      ROS_DOMAIN_ID: "0"
+      CAM_DEV: "${CAM_DEV}"
 
 networks:
   robot-net: {}

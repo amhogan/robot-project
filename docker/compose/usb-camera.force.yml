@@ -1,0 +1,22 @@
+services:
+  usb-camera:
+    # Ensure our command overrides any image defaults
+    entrypoint: []
+    command:
+      - bash
+      - -lc
+      - |
+        set -eo pipefail
+        export AMENT_TRACE_SETUP_FILES=0
+        source /opt/ros/iron/setup.bash
+        exec ros2 run usb_cam usb_cam_node_exe --ros-args \
+          -p video_device:=/dev/video-usbcam \
+          -p framerate:=15.0 \
+          -p image_width:=640 \
+          -p image_height:=480 \
+          -p pixel_format:=yuyv \
+          -p io_method:=mmap
+    devices:
+      - /dev/video-usbcam:/dev/video-usbcam:rwm
+    group_add:
+      - video

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "ui": {
+    "theme": "dark",
+    "showStream": true,
+    "showTelemetry": true
+  },
+  "stream": {
+    "base": "/stream",
+    "snapshot": "/snapshot",
+    "topic": "/image_raw",
+    "type": "mjpeg",
+    "quality": 80
+  },
+  "telemetry": {
+    "status": "/api/netstatus/status",
+    "metrics": "/api/netstatus/metrics.json",
+    "healthz": "/api/netstatus/healthz",
+    "refresh_secs": 5
+  }
+}

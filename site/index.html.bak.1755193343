@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot Dashboard</title>
+<style>
+  :root{--bg:#111;--fg:#eaeaea;--muted:#9aa3b2;--card:#1b1b1b;--line:#2a2a2a;--pill:#2e3440}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Arial,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:16px}
+  h1{margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+  label,select,button{font-size:14px;margin-right:8px}
+  select,button{background:#0e1230;border:1px solid #2a3569;border-radius:8px;color:var(--fg);padding:6px 10px}
+  button:hover,select:hover{border-color:#3b4a8e;cursor:pointer}
+  img{max-width:100%;border-radius:8px;background:#000;display:block}
+  code, .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .kv{display:grid;grid-template-columns:160px 1fr;gap:6px;margin:6px 0}
+  .muted{color:var(--muted)}
+  .pill{display:inline-block;background:var(--pill);padding:2px 8px;border-radius:999px;font-size:12px}
+  #cur{color:var(--muted);word-break:break-all;margin-top:6px}
+  .section{margin-top:10px}
+</style>
+
+<h1>Robot Dashboard <span class="pill mono" id="iface">net: —</span></h1>
+
+<div class="grid">
+  <!-- VIDEO -->
+  <div class="card">
+    <h2>Video</h2>
+    <div class="section">
+      <label>Topic
+        <select id="topic">
+          <option value="/image_raw" selected>/image_raw</option>
+          <option value="/image_raw" selected>/image_raw</option>
+        </select>
+      </label>
+      <label>Quality
+        <select id="quality">
+          <option>80</option><option>70</option><option>60</option><option>90</option>
+        </select>
+      </label>
+      <button id="apply">Apply</button>
+      <div id="cur" class="mono"></div>
+    </div>
+    <img id="video" alt="video stream">
+  </div>
+
+  <!-- TELEMETRY -->
+  <div class="card">
+    <h2>Telemetry</h2>
+    <div class="kv"><div class="muted">CPU Temp:</div>           <div id="cpuTemp">—</div></div>
+    <div class="kv"><div class="muted">CPU Usage:</div>          <div id="cpuPct">—</div></div>
+    <div class="kv"><div class="muted">Load Avg (1/5/15m):</div> <div id="loadAvg">—</div></div>
+    <div class="kv"><div class="muted">Uptime:</div>             <div id="uptime">—</div></div>
+    <div class="kv"><div class="muted">Memory used:</div>        <div id="memUsed">—</div></div>
+    <div class="kv"><div class="muted">Memory total:</div>       <div id="memTotal">—</div></div>
+    <div class="kv"><div class="muted">Memory %:</div>           <div id="memPct">—</div></div>
+    <div class="kv"><div class="muted">Disk used:</div>          <div id="diskUsed">—</div></div>
+    <div class="kv"><div class="muted">Disk total:</div>         <div id="diskTotal">—</div></div>
+    <div class="kv"><div class="muted">Disk %:</div>             <div id="diskPct">—</div></div>
+    <div class="section">
+      <div class="muted">Status JSON (raw):</div>
+      <div class="mono" id="statusMini" style="white-space:pre-wrap;word-break:break-all">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- helpers ----------
+  const $=id=>document.getElementById(id);
+  function bytes(n){ if(n==null) return '—';
+    const u=['B','KB','MB','GB','TB','PB']; let i=0, x=Number(n)||0;
+    while(x>=1024 && i<u.length-1){ x/=1024; i++; }
+    return (x>=10?x.toFixed(0):x.toFixed(1))+' '+u[i];
+  }
+  function pct(used,total){ if(!(Number.isFinite(+used)&&Number.isFinite(+total)&&total>0)) return '—';
+    return (100*used/total).toFixed(1)+'%';
+  }
+  function fmtUptime(sec){
+    sec=+sec; if(!Number.isFinite(sec)) return '—';
+    const d=Math.floor(sec/86400); sec-=d*86400;
+    const h=Math.floor(sec/3600); sec-=h*3600;
+    const m=Math.floor(sec/60);   const s=Math.floor(sec-m*60);
+    return `${d?d+'d ':''}${h}h ${m}m ${s}s`;
+  }
+
+  // ---------- video ----------
+  const img=$('video'), topic=$('topic'), q=$('quality'), cur=$('cur');
+  function setSrc(){
+    const u=`/stream?topic=${encodeURIComponent(topic.value)}&type=mjpeg&quality=${encodeURIComponent(q.value)}`;
+    img.src = u + `&_=${Date.now()}`; // bust cache each Apply
+    cur.textContent = u;
+  }
+  $('apply').onclick=setSrc; setSrc();
+
+  // ---------- telemetry ----------
+  async function j(u, asJson=true){
+    const r = await fetch(u, {cache:'no-store'});
+    if(!r.ok) throw new Error(`${u} -> ${r.status}`);
+    return asJson ? r.json() : r.text();
+  }
+
+  async function tick(){
+    try{
+      const [st,tmp] = await Promise.allSettled([ j('/status'), j('/status_temp') ]);
+      if(st.status==='fulfilled'){
+        const js = st.value || {};
+        // labeled fields
+        const cpuPct = js.cpu?.percent ?? null;
+        const la     = js.cpu?.load_avg ?? null;
+        const memU   = js.memory?.used ?? null;
+        const memT   = js.memory?.total ?? null;
+        const diskU  = js.disk?.used ?? null;
+        const diskT  = js.disk?.total ?? null;
+        const upS    = js.uptime_seconds ?? js.uptime_sec ?? js.uptime ?? js?.system?.uptime;
+
+        $('cpuPct').textContent  = (cpuPct==null?'—':cpuPct.toFixed?cpuPct.toFixed(1)+'%':cpuPct+'%');
+        $('loadAvg').textContent = Array.isArray(la) ? la.join(', ') : (la??'—');
+        $('uptime').textContent  = fmtUptime(upS);
+
+        $('memUsed').textContent  = bytes(memU);
+        $('memTotal').textContent = bytes(memT);
+        $('memPct').textContent   = pct(memU, memT);
+
+        $('diskUsed').textContent  = bytes(diskU);
+        $('diskTotal').textContent = bytes(diskT);
+        $('diskPct').textContent   = pct(diskU, diskT);
+
+        // raw mini JSON for quick debugging
+        $('statusMini').textContent = JSON.stringify({
+          cpu_pct: cpuPct,
+          load_avg: la,
+          mem_used: memU,  mem_total: memT,  mem_pct: (memU!=null&&memT)? +(100*memU/memT).toFixed(1):null,
+          disk_used: diskU, disk_total: diskT, disk_pct: (diskU!=null&&diskT)? +(100*diskU/diskT).toFixed(1):null,
+          up_s: upS
+        });
+      }
+      if(tmp.status==='fulfilled'){
+        const t = tmp.value?.cpu_temp_c ?? tmp.value?.temp_c ?? null;
+        $('cpuTemp').textContent = (t!=null) ? ((t.toFixed?t.toFixed(1):t)+' °C') : '—';
+      }
+    }catch(_){ /* keep last values */ }
+  }
+
+  // Detect which net iface we’re effectively using (best-effort)
+  (async function(){
+    try{ const s = await j('/status'); $('iface').textContent = 'net: '+(s.active_interface || s.iface || location.host || 'unknown'); }
+    catch{ $('iface').textContent='net: unknown'; }
+  })();
+
+  tick(); setInterval(tick, 5000);
+</script>
+<script>
+  async function refreshMetrics(){
+    try {
+      const r = await fetch('/api/netstatus/metrics.json', {cache:'no-store'});
+      const m = await r.json();
+      // Fill spans with ids: cpu_percent, mem_percent, disk_percent, uptime, temp
+      document.getElementById('cpu_percent').textContent = m.cpu_percent.toFixed(1) + '%';
+      document.getElementById('mem_percent').textContent = m.mem.percent.toFixed(1) + '%';
+      document.getElementById('disk_percent').textContent = m.disk.percent.toFixed(1) + '%';
+      document.getElementById('uptime').textContent = Math.floor(m.uptime_seconds/3600) + 'h';
+      const temps = m.temps && Object.values(m.temps);
+      if (temps && temps.length) document.getElementById('temp').textContent = Math.max(...temps).toFixed(1) + '�C';
+    } catch(e) {
+      console.warn('metrics fetch failed', e);
+    }
+  }
+setInterval(refreshMetrics, 3000);
+refreshMetrics();
+</script>

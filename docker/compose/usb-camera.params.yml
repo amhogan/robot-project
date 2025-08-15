@@ -1,0 +1,19 @@
+services:
+  usb-camera:
+    devices:
+      - /dev/video0:/dev/video0
+    group_add: [video]
+    environment:
+      ROS_DOMAIN_ID: "0"
+      PIXEL_FORMAT: ""   # neutralize
+    volumes:
+      - ${PROJECT_ROOT}/docker/compose/usb_cam.params.yaml:/etc/usb_cam.params.yaml:ro
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        source /opt/ros/iron/setup.bash
+        exec ros2 run usb_cam usb_cam_node_exe \
+          --ros-args --params-file /etc/usb_cam.params.yaml \
+          -r __node:=usb_cam

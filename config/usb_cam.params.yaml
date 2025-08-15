@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    video_device: /dev/video0
+    pixel_format: yuyv
+    io_method: mmap
+    framerate: 15.0
+    image_width: 640
+    image_height: 480
+    camera_name: c920

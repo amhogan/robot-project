@@ -2,5 +2,5 @@
 <title>MJPEG Test</title>
 <body style="margin:0;background:#000;color:#fff;font:14px/1.4 system-ui">
   <div style="padding:10px">Raw MJPEG via proxy: <code>/wvs/stream?topic=/image_raw</code></div>
-  <img src="/wvs/stream?topic=/image_raw" style="display:block;width:100%;height:auto;border:0" alt="stream"/>
+  <img id="cam" src="/stream?topic=/image_raw&quality=70&width=640&height=480" />
 </body>

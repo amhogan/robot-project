@@ -1,0 +1,23 @@
+services:
+  usb-camera:
+    devices:
+      - /dev/video0:/dev/video0
+    group_add: [video]
+    # neutralize any PIXEL_FORMAT env from lower files
+    environment:
+      ROS_DOMAIN_ID: "0"
+      PIXEL_FORMAT: ""
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        source /opt/ros/iron/setup.bash
+        exec ros2 run usb_cam usb_cam_node_exe --ros-args \
+          -p video_device:=/dev/video0 \
+          -p framerate:=15.0 \
+          -p image_width:=640 \
+          -p image_height:=480 \
+          -p io_method:=mmap \
+          -p pixel_format:=yuyv \
+          -r __node:=usb_cam

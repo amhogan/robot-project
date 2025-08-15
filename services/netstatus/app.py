@@ -1,28 +1,55 @@
 from flask import Flask, jsonify
 import psutil, time, os
+
 app = Flask(__name__)
-@app.get("/status")
-def status():
-    la = os.getloadavg() if hasattr(os, "getloadavg") else (0,0,0)
-    vm = psutil.virtual_memory(); du = psutil.disk_usage('/')
-    return jsonify({
-        "cpu":{"percent": psutil.cpu_percent(interval=0.1), "load_avg": la},
-        "memory":{"total": vm.total, "used": vm.used},
-        "disk":{"total": du.total, "used": du.used},
-        "uptime_seconds": time.time() - psutil.boot_time()
-    })
-@app.get("/status_temp")
-def status_temp():
-    temp = None
+BOOT_TIME = psutil.boot_time()
+
+def max_temp_c():
     try:
         temps = psutil.sensors_temperatures()
-        for k in temps:
-            for t in temps[k]:
-                if hasattr(t,'current') and t.current:
-                    temp = t.current; break
-            if temp: break
+        if not temps:
+            return None
+        # pick the highest current temp across sensors
+        vals = [e.current for arr in temps.values() for e in arr if getattr(e, "current", None) is not None]
+        return max(vals) if vals else None
     except Exception:
-        pass
-    return jsonify({"cpu_temp_c": temp})
+        return None
+
+@app.get("/healthz")
+def healthz():
+    return jsonify(status="ok")
+
+@app.get("/metrics.json")
+def metrics():
+    vm = psutil.virtual_memory()
+    du = psutil.disk_usage("/")
+    n = psutil.net_io_counters()
+    la = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
+    return jsonify(
+        cpu_percent=psutil.cpu_percent(interval=0.1),
+        load_avg={"1m": la[0], "5m": la[1], "15m": la[2]},
+        mem={"total": vm.total, "used": vm.used, "percent": vm.percent},
+        disk={"total": du.total, "used": du.used, "percent": du.percent},
+        net_io={"bytes_sent": n.bytes_sent, "bytes_recv": n.bytes_recv},
+        temp_c=max_temp_c(),
+        uptime_seconds=int(time.time() - BOOT_TIME),
+    )
+
+# ---- Legacy endpoints (keep old dashboard/nginx working) ----
+@app.get("/status")
+def legacy_status():
+    """Legacy summary used by the existing dashboard."""
+    return jsonify(
+        status="ok",
+        uptime_seconds=int(time.time() - BOOT_TIME),
+        temp_c=max_temp_c()
+    )
+
+@app.get("/status_temp")
+def legacy_temp():
+    """Legacy endpoint: just the temperature (for old widgets)."""
+    t = max_temp_c()
+    return jsonify(temp_c=t) if t is not None else jsonify(temp_c=None), 200
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))

@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Test MJPEG</title>
+<h1>Test Stream</h1>
+<p>If you don’t see video below, the upstream isn’t delivering frames.</p>
+<img id="m" src="/stream?topic=/image_raw&type=mjpeg&quality=80" style="max-width:100%;height:auto" alt="test stream">
+<script>
+  // simple error hint
+  m.onerror = () => document.body.insertAdjacentHTML('beforeend','<pre>img error loading stream URL</pre>');
+</script>

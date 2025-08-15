@@ -17,13 +17,8 @@ fi
 # (Optional) show formats at boot for debugging
 v4l2-ctl --device="$VIDEO_DEVICE" --list-formats-ext || true
 
-set +u
-set +u
 source /opt/ros/iron/setup.bash
-set -u
-set -u
 exec ros2 run v4l2_camera v4l2_camera_node --ros-args \
-  -r image:=/image_raw \
   -p video_device:="$VIDEO_DEVICE" \
   -p image_size:="[$IMAGE_WIDTH,$IMAGE_HEIGHT]" \
   -p pixel_format:="$PIXEL_FORMAT" \

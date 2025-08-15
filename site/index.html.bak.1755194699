@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Robot Dashboard</title>
+<h1>Robot Dashboard</h1>
+
+<p>Stream URL: <code id="u">/stream?topic=%2Fimage_raw&type=mjpeg&quality=80</code></p>
+
+<!-- 1) Preferred: <img> (most browsers) -->
+<img id="mjpeg" alt="Live camera (img)" width="640" height="480"
+     src="/stream?topic=%2Fimage_raw&type=mjpeg&quality=80"
+     onerror="document.getElementById('mjpeg').style.display='none';
+              document.getElementById('frame').style.display='block';">
+
+<!-- 2) Fallback: <iframe> -->
+<iframe id="frame" title="Live camera (iframe)" width="640" height="480" style="display:none;border:0"
+        src="/stream?topic=%2Fimage_raw&type=mjpeg&quality=80"
+        onload="/* if frame fails to paint, try <object> */ setTimeout(()=>{
+          if (!this.contentWindow || this.contentDocument?.body?.innerText?.includes('Not Found')) {
+            this.style.display='none';
+            document.getElementById('obj').style.display='block';
+          }
+        },500);"></iframe>
+
+<!-- 3) Last resort: <object> -->
+<object id="obj" type="text/html" data="/stream?topic=%2Fimage_raw&type=mjpeg&quality=80"
+        width="640" height="480" style="display:none"></object>
