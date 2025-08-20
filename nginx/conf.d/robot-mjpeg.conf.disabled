@@ -11,7 +11,7 @@ server {
 
     # ---------- Status endpoints (proxy to netstatus:5000) ----------
     location /status {
-        proxy_pass http://netstatus:5000/status;
+        proxy_pass http://netstatus/status;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -21,7 +21,7 @@ server {
     }
 
     location /status_temp {
-        proxy_pass http://netstatus:5000/status_temp;
+        proxy_pass http://netstatus/status_temp;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -31,7 +31,7 @@ server {
     }
 
     location /status_uptime {
-        proxy_pass http://netstatus:5000/status_uptime;
+        proxy_pass http://netstatus/status_uptime;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

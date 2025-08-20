@@ -1,16 +1,52 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <title>Robot Dashboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RPi-Robot Dashboard</title>
   <style>
-    body { font-family: sans-serif; background: #111; color: #fff; margin: 0; padding: 0; text-align: center; }
-    #video-stream { border: 2px solid #444; margin: 20px; max-width: 90%; }
-    header { background: #222; padding: 10px 0; font-size: 1.5em; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    h1 { margin-bottom: 0.25rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+    img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; }
+    pre { background: #f6f8fa; padding: 0.75rem; border-radius: 6px; overflow: auto; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
+    .kvs { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; }
+    .muted { color: #6b7280; }
   </style>
 </head>
 <body>
-  <header>RPi-Robot Dashboard</header>
-  <img id="video-stream" src="http://localhost:8080/stream?topic=/image" alt="Live Video Stream"/>
-  <p>Status: <span id="status">Streaming video...</span></p>
+  <h1>RPi-Robot Dashboard</h1>
+  <div class="muted">Live Video Stream &amp; Telemetry</div>
+  <div class="grid">
+    <div class="card">
+      <h2>Live Video Stream</h2>
+      <img id="live" alt="Live Video Stream"
+           src="/stream?topic=/image_raw&quality=80&bitrate=2000000" />
+    </div>
+    <div class="card">
+      <h2>Telemetry</h2>
+      <div class="kvs">
+        <div><strong>CPU Temp:</strong></div> <div><span id="cpu_temp">--</span> °C</div>
+        <div><strong>Uptime:</strong></div>   <div><span id="uptime">--</span></div>
+      </div>
+      <h3>Status JSON</h3>
+      <pre id="status_json">loading…</pre>
+    </div>
+  </div>  <script>
+    async function j(path){ const r = await fetch(path); if(!r.ok) throw new Error(path + " -> " + r.status); return r.json(); }
+    function fmtUptime(s){ const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return `${h}h ${m}m`; }
+    async function refresh(){
+      try{
+        const [stat,temp,up] = await Promise.all([
+          j('/status'), j('/status_temp'), j('/status_uptime')
+        ]);
+        document.querySelector('#status_json').textContent = JSON.stringify(stat,null,2);
+        document.querySelector('#cpu_temp').textContent = (temp.cpu_temp_c ?? '—');
+        document.querySelector('#uptime').textContent = fmtUptime(up.uptime_sec ?? 0);
+      }catch(e){ console.error(e); }
+    }
+    refresh(); setInterval(refresh, 5000);
+  </script>
 </body>
 </html>

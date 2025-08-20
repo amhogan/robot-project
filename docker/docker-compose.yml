@@ -42,6 +42,29 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+    # Append to ~/robot-project/docker/docker-compose.yml under services:
+  v4l2-camera:
+    image: ros:iron
+    container_name: robot-v4l2-camera-1
+    command: >
+      bash -lc "
+        apt-get update &&
+        apt-get install -y ros-iron-v4l2-camera v4l-utils &&
+        . /opt/ros/iron/setup.bash &&
+        ros2 run v4l2_camera v4l2_camera_node
+          --ros-args
+          -p video_device:='/dev/video0'
+          -p image_size:='[640,480]'
+          -p framerate:=15
+      "
+    devices:
+      - "/dev/video0:/dev/video0"
+    restart: unless-stopped
+
+  networks:
+    - default
+
+
 networks:
   default:
     name: robot-net

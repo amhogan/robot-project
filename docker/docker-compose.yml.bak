@@ -1,4 +1,4 @@
-services:
+nano ~/robot-project/docker/docker-compose.ymlservices:
   web-video-server:
     build: ./web-video-server
     container_name: robot-web-video-server-1

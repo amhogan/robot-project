@@ -1,55 +1,38 @@
 from flask import Flask, jsonify
-import psutil, time, os
+import psutil, time, os, subprocess
 
 app = Flask(__name__)
 BOOT_TIME = psutil.boot_time()
 
-def max_temp_c():
-    try:
-        temps = psutil.sensors_temperatures()
-        if not temps:
-            return None
-        # pick the highest current temp across sensors
-        vals = [e.current for arr in temps.values() for e in arr if getattr(e, "current", None) is not None]
-        return max(vals) if vals else None
-    except Exception:
-        return None
-
-@app.get("/healthz")
-def healthz():
-    return jsonify(status="ok")
-
-@app.get("/metrics.json")
-def metrics():
-    vm = psutil.virtual_memory()
-    du = psutil.disk_usage("/")
-    n = psutil.net_io_counters()
-    la = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
-    return jsonify(
-        cpu_percent=psutil.cpu_percent(interval=0.1),
-        load_avg={"1m": la[0], "5m": la[1], "15m": la[2]},
-        mem={"total": vm.total, "used": vm.used, "percent": vm.percent},
-        disk={"total": du.total, "used": du.used, "percent": du.percent},
-        net_io={"bytes_sent": n.bytes_sent, "bytes_recv": n.bytes_recv},
-        temp_c=max_temp_c(),
-        uptime_seconds=int(time.time() - BOOT_TIME),
-    )
-
-# ---- Legacy endpoints (keep old dashboard/nginx working) ----
 @app.get("/status")
-def legacy_status():
-    """Legacy summary used by the existing dashboard."""
-    return jsonify(
-        status="ok",
-        uptime_seconds=int(time.time() - BOOT_TIME),
-        temp_c=max_temp_c()
-    )
+def status():
+    d = psutil.disk_usage("/")
+    vm = psutil.virtual_memory()
+    return jsonify({
+        "cpu": {"percent": psutil.cpu_percent(interval=0.2),
+                "load_avg": os.getloadavg()},
+        "mem": {"total": vm.total, "used": vm.used, "percent": vm.percent},
+        "disk": {"total": d.total, "used": d.used, "percent": d.percent},
+    })
 
 @app.get("/status_temp")
-def legacy_temp():
-    """Legacy endpoint: just the temperature (for old widgets)."""
-    t = max_temp_c()
-    return jsonify(temp_c=t) if t is not None else jsonify(temp_c=None), 200
+def status_temp():
+    # Prefer Raspberry Pi vcgencmd if present
+    try:
+        out = subprocess.check_output(["vcgencmd", "measure_temp"], text=True)
+        # format: temp=62.0'C
+        val = float(out.split("=")[1].split("'")[0])
+        return jsonify({"cpu_temp_c": val})
+    except Exception:
+        temps = psutil.sensors_temperatures()
+        for v in temps.values():
+            if v:
+                return jsonify({"cpu_temp_c": v[0].current})
+        return jsonify({"cpu_temp_c": None})
+
+@app.get("/status_uptime")
+def status_uptime():
+    return jsonify({"uptime_sec": int(time.time() - BOOT_TIME)})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
+    app.run(host="0.0.0.0", port=5000)
