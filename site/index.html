@@ -5,14 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RPi-Robot Dashboard</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
-    h1 { margin-bottom: 0.25rem; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
-    img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; }
-    pre { background: #f6f8fa; padding: 0.75rem; border-radius: 6px; overflow: auto; }
-    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
-    .kvs { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; }
-    .muted { color: #6b7280; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 2rem;
+    }
+    h1 {
+      margin-bottom: 0.25rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    img {
+      max-width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .kvs {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.25rem 0.75rem;
+    }
+    .muted {
+      color: #6b7280;
+    }
   </style>
 </head>
 <body>
@@ -21,32 +50,72 @@
   <div class="grid">
     <div class="card">
       <h2>Live Video Stream</h2>
-      <img id="live" alt="Live Video Stream"
-           src="/stream?topic=/image_raw&quality=80&bitrate=2000000" />
+      <img
+        id="live"
+        alt="Live Video Stream"
+        src="/stream?topic=/image_raw&quality=80&bitrate=2000000"
+      />
     </div>
     <div class="card">
       <h2>Telemetry</h2>
       <div class="kvs">
-        <div><strong>CPU Temp:</strong></div> <div><span id="cpu_temp">--</span> °C</div>
-        <div><strong>Uptime:</strong></div>   <div><span id="uptime">--</span></div>
+        <div><strong>CPU Temp:</strong></div>
+        <div><span id="cpu_temp">--</span> °C</div>
+        <div><strong>Uptime:</strong></div>
+        <div><span id="uptime">--</span></div>
+        <div><strong>CPU Usage:</strong></div>
+        <div><span id="cpu_percent">--</span> %</div>
+        <div><strong>Memory Usage:</strong></div>
+        <div><span id="mem_percent">--</span> %</div>
+        <div><strong>Disk Usage:</strong></div>
+        <div><span id="disk_percent">--</span> %</div>
       </div>
       <h3>Status JSON</h3>
       <pre id="status_json">loading…</pre>
     </div>
-  </div>  <script>
-    async function j(path){ const r = await fetch(path); if(!r.ok) throw new Error(path + " -> " + r.status); return r.json(); }
-    function fmtUptime(s){ const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return `${h}h ${m}m`; }
-    async function refresh(){
-      try{
-        const [stat,temp,up] = await Promise.all([
-          j('/status'), j('/status_temp'), j('/status_uptime')
-        ]);
-        document.querySelector('#status_json').textContent = JSON.stringify(stat,null,2);
-        document.querySelector('#cpu_temp').textContent = (temp.cpu_temp_c ?? '—');
-        document.querySelector('#uptime').textContent = fmtUptime(up.uptime_sec ?? 0);
-      }catch(e){ console.error(e); }
+  </div>
+  <script>
+    // Helper to fetch JSON and propagate errors
+    async function j(path) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(path + " -> " + r.status);
+      return r.json();
     }
-    refresh(); setInterval(refresh, 5000);
+    // Format uptime in hours and minutes
+    function fmtUptime(s) {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      return `${h}h ${m}m`;
+    }
+    // Update telemetry values
+    async function refresh() {
+      try {
+        const [stat, temp, up] = await Promise.all([
+          j('/status'),
+          j('/status_temp'),
+          j('/status_uptime'),
+        ]);
+        // Show raw JSON for debugging
+        document.querySelector('#status_json').textContent =
+          JSON.stringify(stat, null, 2);
+        // Populate individual metrics
+        document.querySelector('#cpu_temp').textContent =
+          temp.cpu_temp_c ?? '—';
+        document.querySelector('#uptime').textContent =
+          fmtUptime(up.uptime_sec ?? 0);
+        // CPU %, Memory %, Disk % values
+        document.querySelector('#cpu_percent').textContent =
+          stat.cpu?.percent ?? '—';
+        document.querySelector('#mem_percent').textContent =
+          stat.mem?.percent ?? '—';
+        document.querySelector('#disk_percent').textContent =
+          stat.disk?.percent ?? '—';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    refresh();
+    setInterval(refresh, 5000);
   </script>
 </body>
 </html>
