@@ -1,69 +1,90 @@
 services:
-  web-video-server:
-    build: ./web-video-server
-    container_name: robot-web-video-server-1
-    command: >
-      bash -lc '. /opt/ros/iron/setup.bash;
-                exec ros2 run web_video_server web_video_server --port 8080 --address 0.0.0.0'
-    ports: ["8080:8080"]
+  netstatus:
+    build:
+      context: /home/pi/robot-project/services/netstatus
+      dockerfile: Dockerfile
+    container_name: robot-netstatus-1
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
     healthcheck:
-      test:
-        - CMD-SHELL
-        - "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8080/').status<500 else sys.exit(1)\""
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:5000/status').status<500 else sys.exit(1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web-video-server:
+    build:
+      context: /home/pi/robot-project/docker/web-video-server
+    container_name: robot-web-video-server-1
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    command:
+      - bash
+      - -lc
+      - |
+        . /opt/ros/iron/setup.bash;
+        exec ros2 run web_video_server web_video_server --port 8080 --address 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8080/').status<500 else sys.exit(1)\""]
       interval: 10s
       timeout: 5s
       retries: 20
       start_period: 60s
 
-  netstatus:
-    build: ../services/netstatus
-    container_name: robot-netstatus-1
-    ports: ["5000:5000"]
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:5000/status').status<500 else sys.exit(1)\""
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  video-dashboard:
-    image: nginx:stable
-    container_name: robot-video-dashboard-1
-    volumes:
-      - ../site:/usr/share/nginx/html:ro
-      - ../nginx/conf.d:/etc/nginx/conf.d:ro
-    ports: ["8081:80"]
-    depends_on:
-      web-video-server:
-        condition: service_healthy
-      netstatus:
-        condition: service_healthy
-    restart: unless-stopped
-
-    # Append to ~/robot-project/docker/docker-compose.yml under services:
-  v4l2-camera:
+  # Simple, reliable USB camera publisher -> publishes /image_raw
+  usb-cam:
     image: ros:iron
-    container_name: robot-v4l2-camera-1
+    container_name: robot-usb-cam-1
+    restart: unless-stopped
+    devices:
+      - "/dev/video0:/dev/video0"           # change to /dev/video1 if needed
     command: >
       bash -lc "
         apt-get update &&
-        apt-get install -y ros-iron-v4l2-camera v4l-utils &&
+        apt-get install -y ros-iron-usb-cam v4l-utils &&
         . /opt/ros/iron/setup.bash &&
-        ros2 run v4l2_camera v4l2_camera_node
+        ros2 run usb_cam usb_cam_node_exe
           --ros-args
           -p video_device:='/dev/video0'
-          -p image_size:='[640,480]'
           -p framerate:=15
+          -p image_width:=640
+          -p image_height:=480
+          -p pixel_format:='mjpeg'
+          -r image_raw:=/image_raw
       "
-    devices:
-      - "/dev/video0:/dev/video0"
+  video-dashboard:
+    image: nginx:stable
+    container_name: robot-video-dashboard-1
+    ports:
+      - "8081:80"
+    volumes:
+      - /home/pi/robot-project/site:/usr/share/nginx/html:ro
+      - /home/pi/robot-project/nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - robot-net
+
+  usb-cam:
+    image: ros:iron
+    container_name: robot-usb-cam-1
     restart: unless-stopped
-
-  networks:
-    - default
-
+    devices:
+      - "/dev/video1:/dev/video1"      # updated mapping
+    command: >
+      bash -lc "
+        apt-get update &&
+        apt-get install -y ros-iron-usb-cam v4l-utils &&
+        . /opt/ros/iron/setup.bash &&
+        ros2 run usb_cam usb_cam_node_exe
+          --ros-args
+          -p video_device:='/dev/video1'   # updated param
+          -p framerate:=15
+          -p image_width:=640
+          -p image_height:=480
+          -p pixel_format:='mjpeg'
+          -r image_raw:=/image_raw
+      "
 
 networks:
   default:

@@ -23,33 +23,27 @@ services:
     environment:
       - ROS_DOMAIN_ID=0
     healthcheck:
-      test: ["CMD-SHELL","bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
       interval: 10s
       timeout: 3s
       retries: 10
       start_period: 10s
 
   usb-cam:
-    image: ros:iron-ros-base
+    image: ros:iron
     container_name: robot-usb-cam-1
     restart: unless-stopped
     devices:
-      - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
-    group_add: [video]
+      - /dev/video0:/dev/video0      # or /dev/video1 if that's your camera
+    group_add: [video]               # if present in one block
     environment:
-      - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - VIDEO_DEVICE=/dev/video0     # keep consistent with devices
+      # any other envs you had
     command: >
-      bash -lc "
-        . /opt/ros/iron/setup.bash &&
-        apt-get update &&
-        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
-        ros2 run v4l2_camera v4l2_camera_node --ros-args
-          -p device:='${VIDEO_DEVICE:-/dev/video0}'
-          -p image_size:='[640,480]'
-          -p pixel_format:='mjpeg'
-      "
-    networks: [robot-net]
+      bash -lc "source /opt/ros/iron/setup.bash &&
+                ros2 run v4l2_camera v4l2_camera_node"
+    networks:
+      - robot-net
 
 networks:
   robot-net: {}

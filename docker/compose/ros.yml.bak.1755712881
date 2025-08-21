@@ -2,7 +2,7 @@ name: robot
 
 services:
   ros-core:
-    image: ros:iron-ros-core
+    image: ros:iron-ros-base
     restart: unless-stopped
     networks: [robot-net]
     command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
@@ -29,27 +29,23 @@ services:
       retries: 10
       start_period: 10s
 
-  usb-cam:
-    image: ros:iron-ros-base
-    container_name: robot-usb-cam-1
-    restart: unless-stopped
-    devices:
-      - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
-    group_add: [video]
-    environment:
-      - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    command: >
-      bash -lc "
-        . /opt/ros/iron/setup.bash &&
-        apt-get update &&
-        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
-        ros2 run v4l2_camera v4l2_camera_node --ros-args
-          -p device:='${VIDEO_DEVICE:-/dev/video0}'
-          -p image_size:='[640,480]'
-          -p pixel_format:='mjpeg'
-      "
-    networks: [robot-net]
+    usb-cam:
+      image: ros:iron-ros-base
+      container_name: robot-usb-cam-1
+      restart: unless-stopped
+      devices:
+        - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
+      group_add: [video]
+      environment:
+        - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
+        - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      command: >
+        bash -lc "apt-get update &&
+                  apt-get install -y --no-install-recommends ros-iron-v4l2-camera &&
+                  rm -rf /var/lib/apt/lists/* &&
+                  source /opt/ros/iron/setup.bash &&
+                  ros2 run v4l2_camera v4l2_camera_node"
+      networks: [robot-net]
 
 networks:
   robot-net: {}

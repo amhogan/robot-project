@@ -30,7 +30,15 @@ services:
       start_period: 10s
 
   usb-cam:
-    image: ros:iron-ros-base
+    image: robot-usb-camera
+
+    build:
+        context: ${PROJECT_ROOT}
+        dockerfile: docker/Dockerfile.usb-camera
+
+    image: robot-usb-camera
+    # keep your devices/group/environment/networks
+
     container_name: robot-usb-cam-1
     restart: unless-stopped
     devices:
@@ -39,16 +47,16 @@ services:
     environment:
       - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    command: >
-      bash -lc "
-        . /opt/ros/iron/setup.bash &&
-        apt-get update &&
-        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
-        ros2 run v4l2_camera v4l2_camera_node --ros-args
-          -p device:='${VIDEO_DEVICE:-/dev/video0}'
-          -p image_size:='[640,480]'
-          -p pixel_format:='mjpeg'
-      "
+    
+    command: ["bash","-lc","sleep infinity"]
+
+
+    #command: >
+     # bash -lc "apt-get update &&
+      #          apt-get install -y --no-install-recommends ros-iron-v4l2-camera &&
+       #         rm -rf /var/lib/apt/lists/* &&
+        #        source /opt/ros/iron/setup.bash &&
+         #       ros2 run v4l2_camera v4l2_camera_node"
     networks: [robot-net]
 
 networks:

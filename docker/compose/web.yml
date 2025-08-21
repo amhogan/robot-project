@@ -27,8 +27,8 @@ services:
     depends_on:
       web-video-server:
         condition: service_healthy
-      netstatus:
-        condition: service_healthy
+      #netstatus:
+      #  condition: service_healthy
 
 networks:
   robot-net: {}

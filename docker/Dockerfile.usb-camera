@@ -1,10 +1,7 @@
 FROM ros:iron-ros-base
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ros-iron-usb-cam ros-iron-image-transport-plugins && \
-    rm -rf /var/lib/apt/lists/*
-ENV ROS_DOMAIN_ID=0
-CMD ["/bin/bash","-lc","source /opt/ros/iron/setup.bash && \
-  exec ros2 run usb_cam usb_cam_node_exe --ros-args \
-    -p video_device:=${CAM_DEV:-/dev/video1} \
-    -p framerate:=15 -p image_width:=640 -p image_height:=480 \
-    -p pixel_format:=mjpeg -p io_method:=mmap"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ros-iron-rmw-cyclonedds-cpp \
+      ros-iron-v4l2-camera \
+    && rm -rf /var/lib/apt/lists/*
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+CMD ["bash","-lc","source /opt/ros/iron/setup.bash && ros2 run v4l2_camera v4l2_camera_node"]
