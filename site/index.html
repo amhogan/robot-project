@@ -1,117 +1,218 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <title>RPi-Robot Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1.5rem; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
-    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem; background:#fff; }
-    img { max-width: 100%; border-radius: 10px; border: 1px solid #ddd; }
-    pre { background: #f6f8fa; padding: .75rem; border-radius: 8px; overflow: auto; }
-    .muted{ color:#6b7280; }
-    .ok{ color:#059669; } .bad{ color:#dc2626; }
+    :root { --bg:#0e0f12; --panel:#191b20; --muted:#9aa4b2; --text:#e7ebf0; --accent:#5ad; --mono:ui-monospace,Consolas,monospace; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    header{padding:14px 18px;background:#13151a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    h1{margin:0;font-size:18px} .spacer{flex:1}
+    .pill{background:#23262d;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:12px}
+    button{background:var(--accent);color:#001018;border:0;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}
+    main{padding:18px;display:grid;grid-template-columns:1.6fr 1fr;gap:18px}
+    .card{background:var(--panel);border:1px solid #23262d;border-radius:14px;overflow:hidden}
+    .card h2{margin:0;padding:12px 14px;border-bottom:1px solid #23262d;font-size:14px;color:#cfd6df}
+    .card .body{padding:14px}
+    #videoStream{width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:contain;border-radius:8px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .stat{background:#1b1e24;border:1px solid #2a2e36;border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:12px;color:#cfe3ff}
+    label{font-size:12px;color:#cfe3ff} input[type=text]{background:#101318;border:1px solid #2a2e36;color:#e7ebf0;border-radius:8px;padding:6px 8px;font-family:var(--mono)}
+    pre{margin:0;padding:12px;background:#0f1217;border:1px solid #2a2e36;border-radius:10px;overflow:auto;max-height:40vh}
+    @media (max-width:900px){ main{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
-  <h1>RPi-Robot Dashboard</h1>
-  <div class="muted">DASH v11 â€” Live Video & Telemetry</div>
+  <header>
+    <h1>RPi-Robot Dashboard</h1>
+    <span id="statusPill" class="pill">Loading…</span>
+    <div class="spacer"></div>
+    <span class="pill">Last update: <span id="lastUpdate">—</span></span>
+    <button id="refreshBtn">Refresh</button>
+  </header>
 
-  <div class="grid">
-    <div class="card">
+  <main>
+    <section class="card">
       <h2>Live Video</h2>
-      <div id="streamStatus" class="muted">initializingâ€¦</div>
-      <img id="live" alt="Live Video Stream" src="">
-    </div>
-
-    <div class="card">
-      <h2>Telemetry</h2>
-      <div class="kvs">
-        <div><strong>CPU Temp:</strong> <span id="cpu_temp">--</span> Â°C</div>
-        <div><strong>Uptime:</strong> <span id="uptime">--</span></div>
+      <div class="body">
+        <div class="row" style="margin-bottom:10px">
+          <label for="topic">Topic:</label>
+          <input id="topic" type="text" size="28" placeholder="/image_raw">
+          <button id="applyTopic">Apply</button>
+          <span id="videoStatus" class="pill">Waiting…</span>
+        </div>
+        <img id="videoStream" alt="Video not available">
+        <div class="row" style="margin-top:10px">
+          <button id="snapshotBtn" title="Force snapshot refresh">Snapshot</button>
+          <button id="cycleBtn" title="Try other transports">Try Next Variant</button>
+        </div>
       </div>
-      <h3>Status JSON</h3>
-      <pre id="status_json">loadingâ€¦</pre>
-    </div>
-  </div>
+    </section>
 
-<script>
-const topics = ["/image_raw", "/camera/image_raw"];
-const live = document.getElementById('live');
-const statusEl = document.getElementById('streamStatus');
+    <section class="card">
+      <h2>System Telemetry</h2>
+      <div class="body">
+        <div class="row" style="margin-bottom:10px">
+          <div class="stat">CPU Temp: <span id="cpuTemp">—</span></div>
+          <div class="stat">Uptime: <span id="uptime">—</span></div>
+        </div>
+        <pre id="rawBox">{}</pre>
+      </div>
+    </section>
+  </main>
 
-function withBust(url){ const s = url.includes('?') ? '&' : '?'; return url + s + 't=' + Date.now(); }
+  <script>
+    const $ = (s, el=document) => el.querySelector(s);
 
-async function probe(url, timeoutMs=3000){
-  const ctrl = new AbortController();
-  const to = setTimeout(()=>ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(to);
-    // For /stream we wonâ€™t finish; we just need headers. Consider any 200 a pass.
-    return r.ok;
-  } catch { clearTimeout(to); return false; }
-}
+    // ---------- VIDEO ----------
+    function getTopic(){ return localStorage.getItem('video_topic') || '/image_raw'; }
+    function setTopic(t){ localStorage.setItem('video_topic', t); }
 
-async function chooseStream(){
-  for (const t of topics){
-    const url = `/stream?topic=${encodeURIComponent(t)}`;
-    const ok = await probe(url, 2000);
-    if (ok) return url;
-  }
-  return null;
-}
+    // Variants to try for a given topic (order matters)
+    function buildVariants(topic) {
+      // Some cameras publish "…/compressed" only; some need &type=ros_compressed
+      const base = topic;
+      const compressed = topic.endsWith('/compressed') ? topic : (topic + '/compressed');
+      return [
+        {label:'raw',        url:`/stream?topic=${encodeURIComponent(base)}&quality=50&width=960&qos=sensor_data`},
+        {label:'ros_compressed', url:`/stream?topic=${encodeURIComponent(base)}&type=ros_compressed&quality=50&width=960&qos=sensor_data`},
+        {label:'compressed-topic', url:`/stream?topic=${encodeURIComponent(compressed)}&quality=50&width=960&qos=sensor_data`},
+        {label:'compressed+type',  url:`/stream?topic=${encodeURIComponent(compressed)}&type=ros_compressed&quality=50&width=960&qos=sensor_data`},
+      ];
+    }
 
-async function chooseSnapshot(){
-  for (const t of topics){
-    const url = `/snapshot?topic=${encodeURIComponent(t)}`;
-    const ok = await probe(url, 2000);
-    if (ok) return url;
-  }
-  return null;
-}
+    let variantIndex = 0;
+    function tryStreamVariant() {
+      const topic = getTopic();
+      const variants = buildVariants(topic);
+      if (variantIndex >= variants.length) variantIndex = 0;
+      const v = variants[variantIndex++];
+      const img = $('#videoStream');
+      $('#videoStatus').textContent = `Trying ${v.label}…`;
+      img.onerror = () => { $('#videoStatus').textContent = `Variant ${v.label} failed`; };
+      img.onload = () => { $('#videoStatus').textContent = `Streaming (${v.label})`; };
+      img.src = v.url + `&cb=${Date.now()}`;
+    }
 
-async function startVideo(){
-  statusEl.textContent = 'connectingâ€¦';
-  let url = await chooseStream();
-  if (url){
-    statusEl.innerHTML = '<span class="ok">stream connected</span>';
-    live.src = withBust(url);
-    // refresh the <img> every 30s to avoid stale connections
-    setInterval(()=> { live.src = withBust(url); }, 30000);
-    return;
-  }
-  // Fallback to snapshots
-  let snap = await chooseSnapshot();
-  if (snap){
-    statusEl.innerHTML = '<span class="bad">stream unavailable, showing snapshots</span>';
-    const tick = async ()=>{
-      live.src = withBust(snap);
-    };
-    tick();
-    setInterval(tick, 1000);
-    return;
-  }
-  statusEl.innerHTML = '<span class="bad">no video topics reachable</span>';
-}
+    function setVideoToSnapshot() {
+      const topic = getTopic();
+      // Also try both /topic and /topic/compressed for snapshot
+      const candidates = [
+        `/snapshot?topic=${encodeURIComponent(topic)}&q=75&cb=${Date.now()}`,
+        `/snapshot?topic=${encodeURIComponent(topic.endsWith('/compressed')?topic:(topic+'/compressed'))}&q=75&cb=${Date.now()}`
+      ];
+      const img = $('#videoStream');
+      let i=0;
+      const tryNext = () => {
+        if (i >= candidates.length) { $('#videoStatus').textContent = 'Snapshot failed'; return; }
+        img.onerror = () => { i++; tryNext(); };
+        img.onload  = () => { $('#videoStatus').textContent = 'Snapshot OK'; };
+        img.src = candidates[i++];
+      };
+      tryNext();
+    }
 
-async function updateTelemetry(){
-  try {
-    const [status, temp, up] = await Promise.all([
-      fetch('/status').then(r=>r.json()).catch(()=>({})),
-      fetch('/status_temp').then(r=>r.json()).catch(()=>({})),
-      fetch('/status_uptime').then(r=>r.json()).catch(()=>({})),
-    ]);
-    document.getElementById('status_json').textContent = JSON.stringify(status, null, 2);
-    document.getElementById('cpu_temp').textContent   = (temp.cpu_temp_c ?? '--');
-    const s = (up.uptime_sec ?? 0)|0; const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
-    document.getElementById('uptime').textContent = `${h}h ${m}m`;
-  } catch(e){}
-}
+    $('#applyTopic').addEventListener('click', () => {
+      const t = $('#topic').value.trim();
+      if (t) { setTopic(t); variantIndex = 0; tryStreamVariant(); }
+    });
+    $('#snapshotBtn').addEventListener('click', setVideoToSnapshot);
+    $('#cycleBtn').addEventListener('click', tryStreamVariant);
 
-startVideo();
-updateTelemetry();
-setInterval(updateTelemetry, 5000);
-</script>
+    // ---------- TELEMETRY ----------
+    // Generic deep-scan helpers to find CPU temp + uptime from arbitrary keys.
+    function deepFind(obj, predicate, path=[]) {
+      let results = [];
+      if (predicate(obj, path)) results.push({value: obj, path});
+      if (obj && typeof obj === 'object') {
+        for (const [k,v] of Object.entries(obj)) {
+          results = results.concat(deepFind(v, predicate, path.concat(k)));
+        }
+      }
+      return results;
+    }
+
+    function pickCpuTempC(d) {
+      // Look for numeric values whose path includes 'cpu' & 'temp' (case-insensitive) or keys named like *temp*_c
+      const matches = deepFind(d, (_val, p) => {
+        const lc = p.map(s=>String(s).toLowerCase());
+        const key = lc[lc.length-1] || '';
+        const hasCpu = lc.some(s=>s.includes('cpu'));
+        const hasTemp = lc.some(s=>s.includes('temp'));
+        return (hasCpu && hasTemp) || /temp_?c$/.test(key);
+      }).filter(x => !isNaN(parseFloat(x.value)));
+      if (matches.length) return parseFloat(matches[0].value);
+
+      // Fallback: strings like "54.3 °C"
+      const strMatches = deepFind(d, v => typeof v === 'string' && /(\d+(\.\d+)?)\s*°?c/i.test(v));
+      if (strMatches.length) return parseFloat(strMatches[0].value);
+
+      return null;
+    }
+
+    function fmtDuration(sec) {
+      sec = Math.floor(sec);
+      const d = Math.floor(sec/86400); sec%=86400;
+      const h = Math.floor(sec/3600); sec%=3600;
+      const m = Math.floor(sec/60); sec%=60;
+      const parts = [];
+      if (d) parts.push(d+'d'); if (h||parts.length) parts.push(h+'h'); if (m||parts.length) parts.push(m+'m'); parts.push(sec+'s');
+      return parts.join(' ');
+    }
+
+    function pickUptime(d) {
+      // Prefer a numeric uptime in seconds anywhere in the tree where key includes 'uptime'
+      const numericUp = deepFind(d, (_v,p) => p.some(s=>String(s).toLowerCase().includes('uptime')))
+        .map(x => x.value)
+        .filter(v => typeof v === 'number' || (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v)));
+      if (numericUp.length) return fmtDuration(parseFloat(numericUp[0]));
+
+      // Otherwise any human-readable uptime string
+      const strUp = deepFind(d, (_v,p) => p.some(s=>String(s).toLowerCase().includes('uptime')))
+        .map(x => x.value)
+        .filter(v => typeof v === 'string' && v.trim());
+      if (strUp.length) return strUp[0];
+
+      return null;
+    }
+
+    async function loadTelemetry() {
+      const btn = $('#refreshBtn');
+      btn.disabled = true;
+      $('#statusPill').textContent = 'Loading…';
+      try {
+        const res = await fetch('/telemetry', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+
+        // Raw JSON for debugging
+        $('#rawBox').textContent = JSON.stringify(data, null, 2);
+
+        // CPU temp / Uptime with heuristics
+        const tc = pickCpuTempC(data);
+        $('#cpuTemp').textContent = (tc != null ? tc.toFixed(1)+' °C' : '—');
+
+        const up = pickUptime(data);
+        $('#uptime').textContent = up ?? '—';
+
+        $('#statusPill').textContent = 'OK';
+        $('#lastUpdate').textContent = new Date().toLocaleTimeString();
+      } catch(e) {
+        console.error(e);
+        $('#statusPill').textContent = 'Error';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Init
+    $('#topic').value = getTopic();
+    tryStreamVariant(); // attempt stream immediately
+    $('#refreshBtn').addEventListener('click', loadTelemetry);
+    loadTelemetry();
+    setInterval(loadTelemetry, 5000);
+  </script>
 </body>
 </html>

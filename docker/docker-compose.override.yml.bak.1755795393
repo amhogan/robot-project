@@ -1,0 +1,68 @@
+networks:
+  robot-net: {}
+
+services:
+  web-video-server:
+    networks: [robot-net]
+
+  video-dashboard:
+    networks: [robot-net]
+
+  telemetry:
+    image: python:3.11-slim
+    networks: [robot-net]
+    restart: unless-stopped
+    command: >
+      python - <<'PY'
+      import json, time, socket
+      from http.server import BaseHTTPRequestHandler, HTTPServer
+      from pathlib import Path
+
+      def read_temp_c():
+          p = Path("/sys/class/thermal/thermal_zone0/temp")
+          try:
+              v = int(p.read_text().strip())
+              return round(v/1000.0, 1)
+          except Exception:
+              return None
+
+      def read_uptime():
+          try:
+              up = float(Path("/proc/uptime").read_text().split()[0])
+              m, s = divmod(int(up), 60); h, m = divmod(m, 60)
+              return {"seconds": up, "hms": f"{h:02d}:{m:02d}:{s:02d}"}
+          except Exception:
+              return {"seconds": None, "hms": None}
+
+      def read_loadavg():
+          try:
+              a, b, c, *_ = Path("/proc/loadavg").read_text().split()
+              return {"1m": float(a), "5m": float(b), "15m": float(c)}
+          except Exception:
+              return {"1m": None, "5m": None, "15m": None}
+
+      class H(BaseHTTPRequestHandler):
+          def do_GET(self):
+              if self.path.startswith("/telemetry"):
+                  data = {
+                      "ts": int(time.time()),
+                      "host": socket.gethostname(),
+                      "cpu_temp_c": read_temp_c(),
+                      "uptime": read_uptime(),
+                      "loadavg": read_loadavg(),
+                  }
+                  body = json.dumps(data).encode()
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Cache-Control", "no-store")
+                  self.send_header("Access-Control-Allow-Origin", "*")
+                  self.end_headers()
+                  self.wfile.write(body)
+              else:
+                  self.send_response(404); self.end_headers()
+      HTTPServer(("0.0.0.0", 9000), H).serve_forever()
+      PY
+    volumes:
+      - /sys/class/thermal/thermal_zone0/temp:/sys/class/thermal/thermal_zone0/temp:ro
+      - /proc/uptime:/proc/uptime:ro
+      - /proc/loadavg:/proc/loadavg:ro

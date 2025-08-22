@@ -1,0 +1,31 @@
+networks:
+  robot-net: {}
+
+services:
+  web-video-server:
+    networks: [robot-net]
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+  video-dashboard:
+    networks: [robot-net]
+
+  # Camera publisher (v4l2_camera) — uses stable symlink /dev/video-usbcam -> /dev/video0
+
+  services:
+    usb-cam:
+      image: ros:iron-ros-base
+      networks: [robot-net]
+      restart: unless-stopped
+      devices:
+        - /dev/video-usbcam:/dev/video0
+      environment:
+        - ROS_DOMAIN_ID=42
+        - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      command: >
+        bash -lc ". /opt/ros/iron/setup.bash &&
+                  ros2 run v4l2_camera v4l2_camera_node
+                  --ros-args
+                    -p video_device:=/dev/video0
+                    -p output_encoding:=rgb8"

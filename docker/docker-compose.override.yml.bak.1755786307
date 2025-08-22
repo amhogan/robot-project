@@ -1,0 +1,32 @@
+networks:
+  robot-net: {}
+
+services:
+  web-video-server:
+    networks: [robot-net]
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+  video-dashboard:
+    networks: [robot-net]
+
+  # Define usb-cam with image+command and RGB pixel format
+  usb-cam:
+    image: ros:iron-ros-base
+    networks: [robot-net]
+    restart: unless-stopped
+    devices:
+      - /dev/video0:/dev/video0        # <-- change to /dev/video1 if needed
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - VIDEO_DEVICE=/dev/video0       # <-- keep in sync with the mapping above
+    command: >
+      bash -lc ". /opt/ros/iron/setup.bash &&
+                apt-get update &&
+                DEBIAN_FRONTEND=noninteractive apt-get install -y ros-iron-v4l2-camera &&
+                ros2 run v4l2_camera v4l2_camera_node
+                --ros-args
+                  -p video_device:=${VIDEO_DEVICE}
+                  -p output_encoding:=rgb8"

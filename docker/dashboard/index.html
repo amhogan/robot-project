@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>RPi-Robot Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1rem; }
+    .card { max-width: 960px; margin: 0 auto; padding: 1rem; border: 1px solid #ddd; border-radius: 12px; }
+    h1 { margin-top: 0; }
+    #status { font-size: 0.95rem; margin: 0.5rem 0 1rem; }
+    #video { width: 100%; max-width: 960px; height: auto; border: 1px solid #ccc; border-radius: 8px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>RPi-Robot Dashboard</h1>
+    <div id="status">Status: detecting camera topic…</div>
+    <img id="video" alt="Live Video Stream (MJPEG)">
+    <div class="mono" id="details"></div>
+  </div>
+
+  <script>
+    // Try to find a working camera topic via the proxied endpoints on 8081.
+    const CANDIDATES = ["/image_raw"];
+    const detailsEl = document.getElementById("details");
+    const statusEl  = document.getElementById("status");
+    const imgEl     = document.getElementById("video");
+
+    async function probeSnapshot(topic, ms=2000) {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), ms);
+      try {
+        const r = await fetch(`/snapshot?topic=${encodeURIComponent(topic)}`, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(t);
+        return r.ok && (r.headers.get("content-type")||"").includes("image");
+      } catch (e) {
+        clearTimeout(t);
+        return false;
+      }
+    }
+
+    (async () => {
+      let chosen = null;
+      for (const t of CANDIDATES) {
+        if (await probeSnapshot(t, 2000)) { chosen = t; break; }
+      }
+      if (!chosen) {
+        statusEl.textContent = "Status: camera topic not found (tried /image_raw).";
+        detailsEl.textContent = "Check that the camera container is publishing and that web_video_server sees the same ROS_DOMAIN_ID/network.";
+        return;
+      }
+      const streamUrl = `/stream?topic=${encodeURIComponent(chosen)}&quality=50&width=960`;
+      imgEl.src = streamUrl;
+      statusEl.textContent = "Status: streaming video…";
+      detailsEl.textContent = `Using topic: ${chosen}  |  URL: ${streamUrl}`;
+    })();
+  </script>
+  <script>
+    (function () {
+      const chosen = "/image_raw";
+      const imgEl = document.getElementById("video");
+      const statusEl = document.getElementById("status");
+      const detailsEl = document.getElementById("details");
+      const streamUrl = `/stream?topic=${encodeURIComponent(chosen)}&quality=50&width=960&qos=sensor_data`;
+      imgEl.src = streamUrl;
+      statusEl.textContent = "Status: streaming videoâ€¦";
+      detailsEl.textContent = `Using topic: ${chosen}  |  URL: ${streamUrl}`;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+{
+  "cpu_temp_path": ["cpu", "temp_c"],
+  "uptime_path":   ["system", "uptime_seconds"]
+}

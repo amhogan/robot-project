@@ -1,0 +1,12 @@
+networks:
+  robot-net: {}
+
+services:
+  web-video-server:
+    networks: [robot-net]
+
+  usb-cam:
+    networks: [robot-net]
+
+  video-dashboard:
+    networks: [robot-net]

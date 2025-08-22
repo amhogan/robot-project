@@ -1,0 +1,23 @@
+networks:
+  robot-net: {}
+
+services:
+  :
+    networks: [robot-net]
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+  :
+    networks: [robot-net]
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      # If your cam is /dev/video1, uncomment the two lines below and adjust:
+      # - VIDEO_DEVICE=/dev/video1
+    # devices:
+    #   - /dev/video1:/dev/video1
+    # If you already set command/params in your base file, do NOT repeat them here.
+
+  :
+    networks: [robot-net]

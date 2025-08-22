@@ -34,26 +34,27 @@ services:
       start_period: 60s
 
   # Simple, reliable USB camera publisher -> publishes /image_raw
-  usb-cam:
-    image: ros:iron
-    container_name: robot-usb-cam-1
-    restart: unless-stopped
-    devices:
-      - "/dev/video0:/dev/video0"           # change to /dev/video1 if needed
-    command: >
-      bash -lc "
-        apt-get update &&
-        apt-get install -y ros-iron-usb-cam v4l-utils &&
-        . /opt/ros/iron/setup.bash &&
-        ros2 run usb_cam usb_cam_node_exe
-          --ros-args
-          -p video_device:='/dev/video0'
-          -p framerate:=15
-          -p image_width:=640
-          -p image_height:=480
-          -p pixel_format:='mjpeg'
-          -r image_raw:=/image_raw
-      "
+ # usb-cam:
+ #   image: ros:iron
+ #   container_name: robot-usb-cam-1
+ #   restart: unless-stopped
+ #   devices:
+ #     - "/dev/video0:/dev/video0"           # change to /dev/video1 if needed
+ #   command: >
+ #     bash -lc "
+ #       apt-get update &&
+ #       apt-get install -y ros-iron-usb-cam v4l-utils &&
+ #       . /opt/ros/iron/setup.bash &&
+ #       ros2 run usb_cam usb_cam_node_exe
+ #         --ros-args
+ #         -p video_device:='/dev/video0'
+ #         -p framerate:=15
+ #         -p image_width:=640
+ #         -p image_height:=480
+ #         -p pixel_format:='mjpeg'
+ #         -r image_raw:=/image_raw
+ #     "
+  
   video-dashboard:
     image: nginx:stable
     container_name: robot-video-dashboard-1
@@ -64,28 +65,7 @@ services:
       - /home/pi/robot-project/nginx/conf.d:/etc/nginx/conf.d:ro
     networks:
       - robot-net
-
-  usb-cam:
-    image: ros:iron
-    container_name: robot-usb-cam-1
-    restart: unless-stopped
-    devices:
-      - "/dev/video1:/dev/video1"      # updated mapping
-    command: >
-      bash -lc "
-        apt-get update &&
-        apt-get install -y ros-iron-usb-cam v4l-utils &&
-        . /opt/ros/iron/setup.bash &&
-        ros2 run usb_cam usb_cam_node_exe
-          --ros-args
-          -p video_device:='/dev/video1'   # updated param
-          -p framerate:=15
-          -p image_width:=640
-          -p image_height:=480
-          -p pixel_format:='mjpeg'
-          -r image_raw:=/image_raw
-      "
-
+  
 networks:
   default:
     name: robot-net

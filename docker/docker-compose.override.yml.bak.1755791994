@@ -1,0 +1,42 @@
+version: "3.9"
+
+networks:
+  robot-net: {}
+
+services:
+  web-video-server:
+    command: >
+      bash -lc ". /opt/ros/iron/setup.bash &&\
+                ros2 run web_video_server web_video_server \
+                  --port 8080 --address 0.0.0.0 \
+                  --ros-args -p qos:=sensor_data"
+    networks: [robot-net]
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+  video-dashboard:
+    volumes:
+      - ./dashboard/index.html:/usr/share/nginx/html/index.html:ro
+      - ./dashboard/default.conf:/etc/nginx/conf.d/default.conf:ro
+    volumes:
+      - ./dashboard/index.html:/usr/share/nginx/html/index.html:ro
+    networks: [robot-net]
+
+  usb-cam:
+    build:
+      context: .
+      dockerfile: Dockerfile.usb-cam
+    networks: [robot-net]
+    restart: unless-stopped
+    devices:
+      - /dev/video-usbcam:/dev/video0
+    environment:
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    command: >
+      bash -lc ". /opt/ros/iron/setup.bash &&
+                ros2 run v4l2_camera v4l2_camera_node
+                --ros-args
+                  -p video_device:=/dev/video0
+                  -p output_encoding:=rgb8"
