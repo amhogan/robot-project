@@ -1,23 +1,36 @@
+name: robot
+
+networks:
+  robot-net: {}
+
 services:
+  # Flask telemetry backend -> /status, /status_temp, /status_uptime
+  # Nginx proxies these paths to this service on port 5000
   netstatus:
     build:
       context: /home/pi/robot-project/services/netstatus
       dockerfile: Dockerfile
     container_name: robot-netstatus-1
     restart: unless-stopped
-    ports:
-      - "5000:5000"
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:5000/status').status<500 else sys.exit(1)\""]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+    networks: [robot-net]
+    ports: ["5000:5000"]
 
+  # Minimal ROS core (handy for interactive ros2 shells later)
+  ros-core:
+    image: ros:iron-ros-core
+    restart: unless-stopped
+    networks: [robot-net]
+    command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
+    environment:
+      - ROS_DOMAIN_ID=0
+
+  # Web Video Server (WVS) – serves /stream and /snapshot
   web-video-server:
     build:
       context: /home/pi/robot-project/docker/web-video-server
     container_name: robot-web-video-server-1
     restart: unless-stopped
+    networks: [robot-net]
     ports:
       - "8080:8080"
     command:
@@ -33,39 +46,37 @@ services:
       retries: 20
       start_period: 60s
 
-  # Simple, reliable USB camera publisher -> publishes /image_raw
- # usb-cam:
- #   image: ros:iron
- #   container_name: robot-usb-cam-1
- #   restart: unless-stopped
- #   devices:
- #     - "/dev/video0:/dev/video0"           # change to /dev/video1 if needed
- #   command: >
- #     bash -lc "
- #       apt-get update &&
- #       apt-get install -y ros-iron-usb-cam v4l-utils &&
- #       . /opt/ros/iron/setup.bash &&
- #       ros2 run usb_cam usb_cam_node_exe
- #         --ros-args
- #         -p video_device:='/dev/video0'
- #         -p framerate:=15
- #         -p image_width:=640
- #         -p image_height:=480
- #         -p pixel_format:='mjpeg'
- #         -r image_raw:=/image_raw
- #     "
-  
+  # Simple USB camera publisher -> publishes /image_raw
+  usb-cam:
+    image: ros:iron-ros-base
+    container_name: robot-usb-cam-1
+    restart: unless-stopped
+    networks: [robot-net]
+    devices:
+      - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
+    group_add: [video]
+    environment:
+      - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    command: >
+      bash -lc "
+        . /opt/ros/iron/setup.bash &&
+        apt-get update &&
+        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
+        exec ros2 run v4l2_camera v4l2_camera_node --ros-args
+          -p device:='${VIDEO_DEVICE:-/dev/video0}'
+          -p image_size:='[640,480]'
+          -p pixel_format:='rgb8'
+      "
+
+  # Nginx dashboard – serves / and proxies /status* and /stream|/snapshot
   video-dashboard:
     image: nginx:stable
     container_name: robot-video-dashboard-1
+    restart: unless-stopped
+    networks: [robot-net]
     ports:
       - "8081:80"
     volumes:
       - /home/pi/robot-project/site:/usr/share/nginx/html:ro
-      - /home/pi/robot-project/nginx/conf.d:/etc/nginx/conf.d:ro
-    networks:
-      - robot-net
-  
-networks:
-  default:
-    name: robot-net
+      - /home/pi/robot-project/site/nginx/conf.d:/etc/nginx/conf.d:ro

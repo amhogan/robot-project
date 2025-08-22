@@ -1,218 +1,253 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>RPi-Robot Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root { --bg:#0e0f12; --panel:#191b20; --muted:#9aa4b2; --text:#e7ebf0; --accent:#5ad; --mono:ui-monospace,Consolas,monospace; }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    header{padding:14px 18px;background:#13151a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    h1{margin:0;font-size:18px} .spacer{flex:1}
-    .pill{background:#23262d;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:12px}
-    button{background:var(--accent);color:#001018;border:0;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer}
-    button:disabled{opacity:.6;cursor:wait}
-    main{padding:18px;display:grid;grid-template-columns:1.6fr 1fr;gap:18px}
-    .card{background:var(--panel);border:1px solid #23262d;border-radius:14px;overflow:hidden}
-    .card h2{margin:0;padding:12px 14px;border-bottom:1px solid #23262d;font-size:14px;color:#cfd6df}
-    .card .body{padding:14px}
-    #videoStream{width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:contain;border-radius:8px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .stat{background:#1b1e24;border:1px solid #2a2e36;border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:12px;color:#cfe3ff}
-    label{font-size:12px;color:#cfe3ff} input[type=text]{background:#101318;border:1px solid #2a2e36;color:#e7ebf0;border-radius:8px;padding:6px 8px;font-family:var(--mono)}
-    pre{margin:0;padding:12px;background:#0f1217;border:1px solid #2a2e36;border-radius:10px;overflow:auto;max-height:40vh}
-    @media (max-width:900px){ main{grid-template-columns:1fr} }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>RPi-Robot Dashboard</h1>
-    <span id="statusPill" class="pill">Loading…</span>
-    <div class="spacer"></div>
-    <span class="pill">Last update: <span id="lastUpdate">—</span></span>
-    <button id="refreshBtn">Refresh</button>
-  </header>
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RPi-Robot Dashboard</title>
+<style>
+  :root { --bg:#0b1321; --card:#121a2b; --muted:#7f8ead; --text:#e6ecff; --accent:#4da3ff; --good:#2ecc71; --warn:#f1c40f; --bad:#e74c3c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif; background:var(--bg); color:var(--text);}
+  header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #1f2b44; }
+  header h1{ margin:0; font-size:20px; letter-spacing:.2px }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#141f36; color:var(--muted); font-size:12px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:#7a8297; }
+  .dot.ok{ background:var(--good) } .dot.warn{ background:var(--warn) } .dot.bad{ background:var(--bad) }
+  main { padding:20px; }
+  .grid { display:grid; gap:16px; grid-template-columns: 2fr 1fr; }
+  @media (max-width:1100px){ .grid { grid-template-columns: 1fr } }
+  .card { background:var(--card); border:1px solid #1f2b44; border-radius:16px; padding:16px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
+  .card h2{ margin:0 0 12px; font-size:16px; color:#cfe2ff; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; align-items:center }
+  .controls input[type=text]{ background:#0e1628; color:var(--text); border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; min-width:220px }
+  .controls select, .controls button { background:#0e1628; color:var(--text); border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; }
+  .controls button:hover{ border-color:#335a99; }
+  #videoWrap{ position:relative; background:#0a1120; border-radius:12px; overflow:hidden; min-height:240px; max-width:640px; }
+  #streamImg, #snapImg{ width:100%; display:block; height:auto; }
+  .hint{ color:var(--muted); font-size:12px; margin-top:6px }
+  .telemetry{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px }
+  .trow{ display:flex; align-items:center; justify-content:space-between; background:#0e1628; border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; }
+  .trow label{ color:#aebbd8; }
+  .val{ font-variant-numeric: tabular-nums; }
+  pre.json{ margin:0; background:#0e1628; border:1px solid #1f2b44; border-radius:10px; padding:12px; overflow:auto; max-height:300px }
+  footer { padding:10px 20px; color:#8ea0c6; font-size:12px }
+  a { color: var(--accent); text-decoration: none; }
+</style>
 
-  <main>
+<header>
+  <h1>RPi-Robot Dashboard</h1>
+  <div class="pill"><span id="statusDot" class="dot"></span><span id="statusText">initializingâ€¦</span></div>
+</header>
+
+<main>
+  <div class="grid">
+    <!-- VIDEO -->
     <section class="card">
       <h2>Live Video</h2>
-      <div class="body">
-        <div class="row" style="margin-bottom:10px">
-          <label for="topic">Topic:</label>
-          <input id="topic" type="text" size="28" placeholder="/image_raw">
-          <button id="applyTopic">Apply</button>
-          <span id="videoStatus" class="pill">Waiting…</span>
-        </div>
-        <img id="videoStream" alt="Video not available">
-        <div class="row" style="margin-top:10px">
-          <button id="snapshotBtn" title="Force snapshot refresh">Snapshot</button>
-          <button id="cycleBtn" title="Try other transports">Try Next Variant</button>
-        </div>
+      <div class="controls">
+        <label for="topic">Topic</label>
+        <input id="topic" type="text" placeholder="/image_raw" />
+        <label for="mode">Mode</label>
+        <select id="mode">
+          <option value="stream">Stream (MJPEG)</option>
+          <option value="snapshot">Snapshot (1 fps)</option>
+        </select>
+        <label for="vidSize">Size</label>
+        <select id="vidSize">
+          <option value="480">480px</option>
+          <option value="640" selected>640px</option>
+          <option value="800">800px</option>
+        </select>
+        <button id="apply">Apply</button>
+        <button id="cycle">Try Next Variant</button>
+        <button id="snap">Take Snapshot</button>
       </div>
+      <div id="videoWrap">
+        <img id="streamImg" alt="Video stream" />
+        <img id="snapImg" alt="Snapshot mode" style="display:none" />
+      </div>
+      <div class="hint" id="videoHint">Using <code>/stream?topic=/image_raw</code></div>
     </section>
 
+    <!-- TELEMETRY -->
     <section class="card">
       <h2>System Telemetry</h2>
-      <div class="body">
-        <div class="row" style="margin-bottom:10px">
-          <div class="stat">CPU Temp: <span id="cpuTemp">—</span></div>
-          <div class="stat">Uptime: <span id="uptime">—</span></div>
-        </div>
-        <pre id="rawBox">{}</pre>
+      <div class="telemetry">
+        <div class="trow"><label>CPU %</label><span id="cpuPct" class="val">â€“</span></div>
+        <div class="trow"><label>Load Avg</label><span id="load" class="val">â€“</span></div>
+        <div class="trow"><label>CPU Temp</label><span id="cpuTemp" class="val">â€“</span></div>
+        <div class="trow"><label>Uptime</label><span id="uptime" class="val">â€“</span></div>
+        <div class="trow"><label>Disk Used</label><span id="disk" class="val">â€“</span></div>
       </div>
+      <p class="hint">Endpoints: <a href="/status" target="_blank">/status</a>, <a href="/status_temp" target="_blank">/status_temp</a>, <a href="/status_uptime" target="_blank">/status_uptime</a></p>
     </section>
-  </main>
 
-  <script>
-    const $ = (s, el=document) => el.querySelector(s);
+    <!-- RAW JSON -->
+    <section class="card" style="grid-column: 1 / -1;">
+      <h2>Raw Status JSON</h2>
+      <pre class="json" id="rawJson">{}</pre>
+    </section>
+  </div>
+</main>
 
-    // ---------- VIDEO ----------
-    function getTopic(){ return localStorage.getItem('video_topic') || '/image_raw'; }
-    function setTopic(t){ localStorage.setItem('video_topic', t); }
+<footer>web_video_server proxied at <code>/stream</code> and <code>/snapshot</code> â€¢ telemetry at <code>/status*</code></footer>
 
-    // Variants to try for a given topic (order matters)
-    function buildVariants(topic) {
-      // Some cameras publish "…/compressed" only; some need &type=ros_compressed
-      const base = topic;
-      const compressed = topic.endsWith('/compressed') ? topic : (topic + '/compressed');
-      return [
-        {label:'raw',        url:`/stream?topic=${encodeURIComponent(base)}&quality=50&width=960&qos=sensor_data`},
-        {label:'ros_compressed', url:`/stream?topic=${encodeURIComponent(base)}&type=ros_compressed&quality=50&width=960&qos=sensor_data`},
-        {label:'compressed-topic', url:`/stream?topic=${encodeURIComponent(compressed)}&quality=50&width=960&qos=sensor_data`},
-        {label:'compressed+type',  url:`/stream?topic=${encodeURIComponent(compressed)}&type=ros_compressed&quality=50&width=960&qos=sensor_data`},
-      ];
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const topicEl = $('topic');
+  const modeEl = $('mode');
+  const sizeEl = $('vidSize');
+  const applyBtn = $('apply');
+  const cycleBtn = $('cycle');
+  const snapBtn  = $('snap');
+  const streamImg = $('streamImg');
+  const snapImg = $('snapImg');
+  const statusDot = $('statusDot');
+  const statusText = $('statusText');
+  const cpuPct = $('cpuPct'); const load = $('load'); const cpuTemp = $('cpuTemp');
+  const uptime = $('uptime'); const disk = $('disk'); const rawJson = $('rawJson');
+  const hint = $('videoHint');
+  const videoWrap = $('videoWrap');
+
+  // Persisted settings
+  const S = {
+    topic: localStorage.getItem('topic') || '/image_raw',
+    mode: localStorage.getItem('mode') || 'stream',
+    variant: parseInt(localStorage.getItem('variant') || '0', 10),
+    vidSize: parseInt(localStorage.getItem('vidSize') || '640', 10)
+  };
+  // normalize topic to start with "/"
+  if (!String(S.topic).startsWith('/')) S.topic = '/' + S.topic;
+
+  topicEl.value = S.topic;
+  modeEl.value  = S.mode;
+  sizeEl.value  = String(S.vidSize);
+  videoWrap.style.maxWidth = S.vidSize + 'px';
+
+  // Stream URL variants (no URL-encoding for topic)
+  const variants = [
+    t => `/stream?topic=${t}`,
+    t => `/stream?topic=${t}&type=ros_compressed`,
+    t => `/stream?topic=${t}&type=raw`,
+  ];
+
+  function setStatus(level, msg){
+    statusDot.className = 'dot ' + (level || '');
+    statusText.textContent = msg || '';
+  }
+
+  function humanBytes(n){ if(n==null) return 'â€“'; const u=['B','KB','MB','GB','TB'];
+    let i=0,v=Number(n); while(v>=1024 && i<u.length-1){ v/=1024; i++; } return v.toFixed(1)+' '+u[i]; }
+  function humanSeconds(s){
+    if(s==null) return 'â€“'; s = Math.floor(Number(s));
+    const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60); s%=60;
+    const parts=[]; if(d) parts.push(d+'d'); if(h) parts.push(h+'h'); if(m) parts.push(m+'m'); parts.push(s+'s'); return parts.join(' ');
+  }
+
+  function applyVideo(){
+    S.topic = topicEl.value || '/image_raw';
+    if (!S.topic.startsWith('/')) S.topic = '/' + S.topic;
+    S.mode = modeEl.value;
+    S.vidSize = parseInt(sizeEl.value, 10) || 640;
+    localStorage.setItem('topic', S.topic);
+    localStorage.setItem('mode', S.mode);
+    localStorage.setItem('vidSize', String(S.vidSize));
+
+    videoWrap.style.maxWidth = S.vidSize + 'px';
+
+    if(S.mode === 'stream'){
+      const url = variants[S.variant % variants.length](S.topic);
+      streamImg.src = url;
+      streamImg.style.display = '';
+      snapImg.style.display = 'none';
+      hint.textContent = `Using ${url}`;
+    } else {
+      streamImg.style.display = 'none';
+      snapImg.style.display = '';
+      doSnapshot();
+      hint.textContent = `Using /snapshot?topic=${S.topic} (auto 1 fps)`;
     }
+  }
 
-    let variantIndex = 0;
-    function tryStreamVariant() {
-      const topic = getTopic();
-      const variants = buildVariants(topic);
-      if (variantIndex >= variants.length) variantIndex = 0;
-      const v = variants[variantIndex++];
-      const img = $('#videoStream');
-      $('#videoStatus').textContent = `Trying ${v.label}…`;
-      img.onerror = () => { $('#videoStatus').textContent = `Variant ${v.label} failed`; };
-      img.onload = () => { $('#videoStatus').textContent = `Streaming (${v.label})`; };
-      img.src = v.url + `&cb=${Date.now()}`;
+  function cycleVariant(){
+    S.variant = (S.variant + 1) % variants.length;
+    localStorage.setItem('variant', String(S.variant));
+    if(S.mode === 'stream') applyVideo();
+  }
+
+  let snapTimer = null;
+  function doSnapshot(){
+    const url = `/snapshot?topic=${S.topic}&t=${Date.now()}`;
+    snapImg.src = url;
+    if(snapTimer) clearTimeout(snapTimer);
+    if(S.mode === 'snapshot'){
+      snapTimer = setTimeout(doSnapshot, 1000); // 1 fps refresh
     }
+  }
 
-    function setVideoToSnapshot() {
-      const topic = getTopic();
-      // Also try both /topic and /topic/compressed for snapshot
-      const candidates = [
-        `/snapshot?topic=${encodeURIComponent(topic)}&q=75&cb=${Date.now()}`,
-        `/snapshot?topic=${encodeURIComponent(topic.endsWith('/compressed')?topic:(topic+'/compressed'))}&q=75&cb=${Date.now()}`
-      ];
-      const img = $('#videoStream');
-      let i=0;
-      const tryNext = () => {
-        if (i >= candidates.length) { $('#videoStatus').textContent = 'Snapshot failed'; return; }
-        img.onerror = () => { i++; tryNext(); };
-        img.onload  = () => { $('#videoStatus').textContent = 'Snapshot OK'; };
-        img.src = candidates[i++];
-      };
-      tryNext();
-    }
+  applyBtn.addEventListener('click', applyVideo);
+  cycleBtn.addEventListener('click', cycleVariant);
+  snapBtn.addEventListener('click', () => {
+    const url = `/snapshot?topic=${S.topic}&t=${Date.now()}`;
+    window.open(url, '_blank');
+  });
+  sizeEl.addEventListener('change', applyVideo);
 
-    $('#applyTopic').addEventListener('click', () => {
-      const t = $('#topic').value.trim();
-      if (t) { setTopic(t); variantIndex = 0; tryStreamVariant(); }
-    });
-    $('#snapshotBtn').addEventListener('click', setVideoToSnapshot);
-    $('#cycleBtn').addEventListener('click', tryStreamVariant);
+  // Detect stream health via onload/onerror of the <img>
+  let lastOk = 0;
+  streamImg.addEventListener('load', () => { lastOk = Date.now(); setStatus('ok','streaming'); });
+  streamImg.addEventListener('error', () => setStatus('warn','stream error â€” try Next Variant or Snapshot'));
 
-    // ---------- TELEMETRY ----------
-    // Generic deep-scan helpers to find CPU temp + uptime from arbitrary keys.
-    function deepFind(obj, predicate, path=[]) {
-      let results = [];
-      if (predicate(obj, path)) results.push({value: obj, path});
-      if (obj && typeof obj === 'object') {
-        for (const [k,v] of Object.entries(obj)) {
-          results = results.concat(deepFind(v, predicate, path.concat(k)));
-        }
+  // Telemetry poll (robust uptime parsing: JSON OR plain text)
+  async function poll(){
+    try{
+      const [s, t, u] = await Promise.allSettled([
+        fetch('/status'), fetch('/status_temp'), fetch('/status_uptime')
+      ]);
+      let js = {};
+      if(s.status==='fulfilled' && s.value.ok){
+        js = await s.value.json();
+        rawJson.textContent = JSON.stringify(js,null,2);
+        const cpuPercent = js?.cpu?.percent;
+        const la = js?.cpu?.load_avg;
+        const diskTotal = js?.disk?.total, diskUsed = js?.disk?.used;
+        cpuPct.textContent = cpuPercent!=null ? cpuPercent.toFixed(1)+'%' : 'â€“';
+        load.textContent = Array.isArray(la) ? la.map(v=>Number(v).toFixed(2)).join(', ') : 'â€“';
+        disk.textContent = (diskTotal!=null && diskUsed!=null) ? `${humanBytes(diskUsed)} / ${humanBytes(diskTotal)}` : 'â€“';
       }
-      return results;
-    }
-
-    function pickCpuTempC(d) {
-      // Look for numeric values whose path includes 'cpu' & 'temp' (case-insensitive) or keys named like *temp*_c
-      const matches = deepFind(d, (_val, p) => {
-        const lc = p.map(s=>String(s).toLowerCase());
-        const key = lc[lc.length-1] || '';
-        const hasCpu = lc.some(s=>s.includes('cpu'));
-        const hasTemp = lc.some(s=>s.includes('temp'));
-        return (hasCpu && hasTemp) || /temp_?c$/.test(key);
-      }).filter(x => !isNaN(parseFloat(x.value)));
-      if (matches.length) return parseFloat(matches[0].value);
-
-      // Fallback: strings like "54.3 °C"
-      const strMatches = deepFind(d, v => typeof v === 'string' && /(\d+(\.\d+)?)\s*°?c/i.test(v));
-      if (strMatches.length) return parseFloat(strMatches[0].value);
-
-      return null;
-    }
-
-    function fmtDuration(sec) {
-      sec = Math.floor(sec);
-      const d = Math.floor(sec/86400); sec%=86400;
-      const h = Math.floor(sec/3600); sec%=3600;
-      const m = Math.floor(sec/60); sec%=60;
-      const parts = [];
-      if (d) parts.push(d+'d'); if (h||parts.length) parts.push(h+'h'); if (m||parts.length) parts.push(m+'m'); parts.push(sec+'s');
-      return parts.join(' ');
-    }
-
-    function pickUptime(d) {
-      // Prefer a numeric uptime in seconds anywhere in the tree where key includes 'uptime'
-      const numericUp = deepFind(d, (_v,p) => p.some(s=>String(s).toLowerCase().includes('uptime')))
-        .map(x => x.value)
-        .filter(v => typeof v === 'number' || (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v)));
-      if (numericUp.length) return fmtDuration(parseFloat(numericUp[0]));
-
-      // Otherwise any human-readable uptime string
-      const strUp = deepFind(d, (_v,p) => p.some(s=>String(s).toLowerCase().includes('uptime')))
-        .map(x => x.value)
-        .filter(v => typeof v === 'string' && v.trim());
-      if (strUp.length) return strUp[0];
-
-      return null;
-    }
-
-    async function loadTelemetry() {
-      const btn = $('#refreshBtn');
-      btn.disabled = true;
-      $('#statusPill').textContent = 'Loading…';
-      try {
-        const res = await fetch('/telemetry', { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP '+res.status);
-        const data = await res.json();
-
-        // Raw JSON for debugging
-        $('#rawBox').textContent = JSON.stringify(data, null, 2);
-
-        // CPU temp / Uptime with heuristics
-        const tc = pickCpuTempC(data);
-        $('#cpuTemp').textContent = (tc != null ? tc.toFixed(1)+' °C' : '—');
-
-        const up = pickUptime(data);
-        $('#uptime').textContent = up ?? '—';
-
-        $('#statusPill').textContent = 'OK';
-        $('#lastUpdate').textContent = new Date().toLocaleTimeString();
-      } catch(e) {
-        console.error(e);
-        $('#statusPill').textContent = 'Error';
-      } finally {
-        btn.disabled = false;
+      if(t.status==='fulfilled' && t.value.ok){
+        const tj = await t.value.json().catch(async ()=>({cpu_temp_c: parseFloat((await t.value.text())||'NaN')}));
+        const c = tj?.cpu_temp_c;
+        cpuTemp.textContent = (c!=null && !Number.isNaN(c)) ? c.toFixed(2)+' Â°C' : 'â€“';
       }
+      if(u.status==='fulfilled' && u.value.ok){
+        let upSecs = null;
+        const ct = u.value.headers.get("content-type") || "";
+        try {
+          if (ct.includes("application/json")) {
+            const uj = await u.value.json();
+            upSecs = uj?.uptime_seconds ?? uj?.uptime_sec ?? uj?.uptime ?? uj?.seconds ?? null;
+          } else {
+            const txt = await u.value.text();
+            const m = String(txt).match(/([0-9]+(?:\.[0-9]+)?)/);
+            if (m) upSecs = parseFloat(m[1]);
+          }
+        } catch(e) {}
+        if (upSecs != null) uptime.textContent = humanSeconds(upSecs);
+      }
+      if(S.mode==='stream'){
+        if(Date.now()-lastOk > 4000) setStatus('warn','no frames yet â€” try Next Variant or switch to Snapshot');
+      } else {
+        setStatus('ok','snapshot mode');
+      }
+    }catch(e){
+      setStatus('bad','telemetry error');
+    } finally {
+      setTimeout(poll, 2000);
     }
+  }
 
-    // Init
-    $('#topic').value = getTopic();
-    tryStreamVariant(); // attempt stream immediately
-    $('#refreshBtn').addEventListener('click', loadTelemetry);
-    loadTelemetry();
-    setInterval(loadTelemetry, 5000);
-  </script>
-</body>
-</html>
+  // Boot
+  applyVideo();
+  poll();
+})();
+</script>
