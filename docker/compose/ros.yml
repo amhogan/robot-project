@@ -53,4 +53,6 @@ services:
     networks: [robot-net]
 
 networks:
-  robot-net: {}
+  robot-net:
+    external: true
+    name: robot_robot-net
