@@ -1,0 +1,68 @@
+name: robot
+networks:
+  robot-net: {}
+
+services:
+  netstatus:
+    build:
+      context: /home/pi/robot-project/services/netstatus
+      dockerfile: Dockerfile
+    container_name: robot-netstatus-1
+    restart: unless-stopped
+    networks: [robot-net]
+    ports: ["5000:5000"]
+
+  ros-core:
+    image: ros:iron-ros-core
+    restart: unless-stopped
+    networks: [robot-net]
+    command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
+    environment: ["ROS_DOMAIN_ID=0"]
+
+  web-video-server:
+    # Keep your proven setup
+    build:
+      context: /home/pi/robot-project/docker/web-video-server
+    container_name: robot-web-video-server-1
+    restart: unless-stopped
+    networks: [robot-net]
+    ports: ["8080:8080"]
+    command:
+      - bash
+      - -lc
+      - |
+        . /opt/ros/iron/setup.bash;
+        exec ros2 run web_video_server web_video_server --port 8080 --address 0.0.0.0
+
+  usb-cam:
+    # Simple publisher of /image_raw (re-uses your working pattern)
+    image: ros:iron-ros-base
+    container_name: robot-usb-cam-1
+    restart: unless-stopped
+    networks: [robot-net]
+    devices:
+      - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
+    group_add: [video]
+    environment:
+      - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    command: >
+      bash -lc "
+        . /opt/ros/iron/setup.bash &&
+        apt-get update &&
+        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
+        exec ros2 run v4l2_camera v4l2_camera_node --ros-args
+          -p device:='${VIDEO_DEVICE:-/dev/video0}'
+          -p image_size:='[640,480]'
+          -p pixel_format:='rgb8'
+      "
+
+  video-dashboard:
+    image: nginx:stable
+    container_name: robot-video-dashboard-1
+    restart: unless-stopped
+    networks: [robot-net]
+    ports: ["8081:80"]
+    volumes:
+      - /home/pi/robot-project/site:/usr/share/nginx/html:ro
+      - /home/pi/robot-project/site/nginx/conf.d:/etc/nginx/conf.d:ro
