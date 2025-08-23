@@ -3,14 +3,20 @@ networks:
   robot-net: {}
 
 services:
+
   netstatus:
-    build:
-      context: /home/pi/robot-project/services/netstatus
-      dockerfile: Dockerfile
     container_name: robot-netstatus-1
+    image: python:3.11-slim
+    # ... your command/env/volumes here ...
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/status >/dev/null 2>&1 || curl -fsS http://127.0.0.1:5000/status >/dev/null"]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
-    networks: [robot-net]
-    ports: ["5000:5000"]
 
   ros-core:
     image: ros:iron-ros-core
