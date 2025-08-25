@@ -1,47 +1,102 @@
-nano ~/robot-project/docker/docker-compose.ymlservices:
-  web-video-server:
-    build: ./web-video-server
-    container_name: robot-web-video-server-1
-    command: >
-      bash -lc '. /opt/ros/iron/setup.bash;
-                exec ros2 run web_video_server web_video_server --port 8080 --address 0.0.0.0'
-    ports: ["8080:8080"]
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8080/').status<500 else sys.exit(1)\""
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
-
-  netstatus:
-    build: ../services/netstatus
-    container_name: robot-netstatus-1
-    ports: ["5000:5000"]
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - "python3 -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:5000/status').status<500 else sys.exit(1)\""
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  video-dashboard:
-    image: nginx:stable
-    container_name: robot-video-dashboard-1
-    volumes:
-      - ../site:/usr/share/nginx/html:ro
-      - ../nginx/conf.d:/etc/nginx/conf.d:ro
-    ports: ["8081:80"]
-    depends_on:
-      web-video-server:
-        condition: service_healthy
-      netstatus:
-        condition: service_healthy
-    restart: unless-stopped
+name: robot
 
 networks:
-  default:
-    name: robot-net
+  robot-net: {}
+
+services:
+
+  netstatus:
+    container_name: robot-netstatus-1
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ../services/netstatus:/app:ro
+    command: >
+      bash -lc "pip install --no-cache-dir -r /app/requirements.txt &&
+                exec python -u /app/app.py"
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/status', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+    networks:
+      robot_robot-net:
+        aliases: [netstatus]
+
+  # Minimal ROS core (handy for interactive ros2 shells later)
+  ros-core:
+    image: ros:iron-ros-core
+    restart: unless-stopped
+    networks: [robot-net]
+      robot_robot-net:
+        aliases:
+          - ros-core
+    command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
+    environment:
+      - ROS_DOMAIN_ID=0
+
+  web-video-server:
+    container_name: robot-web-video-server-1
+    image: robot-web-video-server   # your built image name
+    ports:
+      - "8080:8080"
+    command: >
+      bash -lc "source /opt/ros/iron/setup.bash &&
+                ros2 run web_video_server web_video_server
+                --port 8080 --address 0.0.0.0"
+    restart: unless-stopped
+    networks:
+      robot_robot-net:
+        aliases:
+          - web-video-server
+
+
+  # Simple USB camera publisher -> publishes /image_raw
+  usb-cam:
+    image: ros:iron-ros-base
+    container_name: robot-usb-cam-1
+    restart: unless-stopped
+    networks:
+      robot_robot-net:
+        aliases:
+          - usbcamera
+
+    devices:
+      - ${VIDEO_DEVICE:-/dev/video0}:${VIDEO_DEVICE:-/dev/video0}
+    group_add: [video]
+    environment:
+      - VIDEO_DEVICE=${VIDEO_DEVICE:-/dev/video0}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    command: >
+      bash -lc "
+        . /opt/ros/iron/setup.bash &&
+        apt-get update &&
+        apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
+        exec ros2 run v4l2_camera v4l2_camera_node --ros-args
+          -p device:='${VIDEO_DEVICE:-/dev/video0}'
+          -p image_size:='[640,480]'
+          -p pixel_format:='rgb8'
+      "
+
+  video-dashboard:
+    container_name: robot-video-dashboard-1
+    image: nginx:stable
+    ports:
+      - "8081:80"    # make sure the dashboard is 8081 externally
+    volumes:
+      - ../site:/usr/share/nginx/html:ro
+      - ../site/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - netstatus
+      - web-video-server
+    restart: unless-stopped
+    networks:
+      robot_robot-net:
+        aliases:
+          - video-dashboard
+    

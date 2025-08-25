@@ -7,7 +7,7 @@ services:
     image: python:3.11-slim
     container_name: robot-netstatus-1
     working_dir: /app
-    command: sh -lc "python -m pip install -q --no-cache-dir flask psutil && python app.py"
+    command: python app.py
     volumes:
       - ../services/netstatus:/app:ro
     expose:

@@ -1,5 +1,5 @@
 # docker-compose.yml
-# Robot Project - Core stack
+# Robot Project — Core stack
 # Standardized network name: robot-net
 
 services:
@@ -7,7 +7,7 @@ services:
     image: python:3.11-slim
     container_name: robot-netstatus-1
     working_dir: /app
-    command: sh -lc "python -m pip install -q --no-cache-dir flask psutil && python app.py"
+    command: python app.py
     volumes:
       - ../services/netstatus:/app:ro
     expose:
@@ -38,10 +38,10 @@ services:
 
   web-video-server:
     container_name: robot-web-video-server-1
-    image: robot-web-video-server
+    image: robot-web-video-server   # If you build locally, keep this tag consistent with your Dockerfile build
     ports:
       - "8080:8080"
-    # If your image doesn't already run the server by default, keep the command:
+    # If your image doesn’t already run the server by default, keep the command:
     command: >
       bash -lc "source /opt/ros/iron/setup.bash &&
                 ros2 run web_video_server web_video_server
@@ -60,6 +60,7 @@ services:
       - "/dev/video0:/dev/video0"
     environment:
       - VIDEO_DEVICE=/dev/video0
+    # If your camera node needs ROS env:
     command: >
       bash -lc "source /opt/ros/iron/setup.bash &&
                 ros2 run v4l2_camera v4l2_camera_node
@@ -87,21 +88,21 @@ services:
       robot-net:
         aliases: [video-dashboard]
 
-# Optional: RoboClaw driver service (uncomment and adjust when ready)
-#  roboclaw_driver:
-#    build:
-#      context: ../services/roboclaw_driver
-#    container_name: robot-roboclaw_driver-1
-#    environment:
-#      - ROS_DOMAIN_ID=0
-#    devices:
-#      - "/dev/ttyACM0:/dev/ttyACM0"   # update if different
-#    depends_on:
-#      - ros-core
-#    restart: unless-stopped
-#    networks:
-#      robot-net:
-#        aliases: [roboclaw-driver]
+# If/when you want the RoboClaw driver in compose, uncomment and adjust:
+  roboclaw_driver:
+    build:
+      context: ../services/roboclaw_driver
+    container_name: robot-roboclaw_driver-1
+    environment:
+      - ROS_DOMAIN_ID=0
+    devices:
+      - "/dev/ttyACM0:/dev/ttyACM0"   # adjust to your Roboclaw serial path
+    depends_on:
+      - ros-core
+    restart: unless-stopped
+    networks:
+      robot-net:
+        aliases: [roboclaw-driver]
 
 networks:
   robot-net:
