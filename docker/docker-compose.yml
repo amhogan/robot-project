@@ -1,13 +1,13 @@
 # docker-compose.yml
-# Robot Project - Core stack
-# Standardized network name: robot-net
+# Robot Project - Core stack (ASCII only)
+# Network: robot-net
 
 services:
   netstatus:
     image: python:3.11-slim
     container_name: robot-netstatus-1
     working_dir: /app
-    command: sh -lc "python -m pip install -q --no-cache-dir flask psutil && python app.py"
+    command: bash -lc "python -m pip install -q --no-cache-dir flask psutil && python app.py"
     volumes:
       - ../services/netstatus:/app:ro
     expose:
@@ -23,49 +23,51 @@ services:
       robot-net:
         aliases: [netstatus]
 
-  # Minimal ROS core (handy for interactive ros2 shells later)
   ros-core:
     image: ros:iron-ros-core
     container_name: ros-core
+    environment: [ "ROS_DOMAIN_ID=0" ]
     command: ["bash","-lc","source /opt/ros/iron/setup.bash && sleep infinity"]
-    environment:
-      - ROS_DOMAIN_ID=0
     restart: unless-stopped
     networks:
       robot-net:
-        aliases:
-          - ros-core
+        aliases: [ros-core]
 
   web-video-server:
+    image: ros:iron-ros-base
     container_name: robot-web-video-server-1
-    image: robot-web-video-server
-    ports:
-      - "8080:8080"
-    # If your image doesn't already run the server by default, keep the command:
+    environment: [ "ROS_DOMAIN_ID=0" ]
+    ports: ["8080:8080"]
     command: >
-      bash -lc "source /opt/ros/iron/setup.bash &&
-                ros2 run web_video_server web_video_server
-                --port 8080 --address 0.0.0.0"
-    depends_on:
-      - ros-core
+      bash -lc "apt-get update &&
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ros-iron-web-video-server &&
+              rm -rf /var/lib/apt/lists/* &&
+              . /opt/ros/iron/setup.bash &&
+              ros2 run web_video_server web_video_server --port 8080 --address 0.0.0.0"
+    depends_on: [ros-core]
     restart: unless-stopped
     networks:
       robot-net:
         aliases: [web-video-server]
 
   usb-cam:
-    image: ghcr.io/yourorg/ros2-v4l2-camera:iron
+    image: ros:iron-ros-base
     container_name: robot-usb-cam-1
-    devices:
-      - "/dev/video0:/dev/video0"
     environment:
-      - VIDEO_DEVICE=/dev/video0
+      - ROS_DOMAIN_ID=0
+      - VIDEO_DEVICE=/dev/video0   # change to /dev/video1 if needed
+    devices:
+      - "/dev/video0:/dev/video0"  # keep in sync with VIDEO_DEVICE
     command: >
-      bash -lc "source /opt/ros/iron/setup.bash &&
-                ros2 run v4l2_camera v4l2_camera_node
-                --ros-args -p video_device:=${VIDEO_DEVICE}"
-    depends_on:
-      - ros-core
+      bash -lc ". /opt/ros/iron/setup.bash &&
+              apt-get update &&
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ros-iron-v4l2-camera v4l-utils &&
+              rm -rf /var/lib/apt/lists/* &&
+              ros2 run v4l2_camera v4l2_camera_node --ros-args
+                -p video_device:=${VIDEO_DEVICE}
+                -p output_encoding:=jpeg
+                -p image_size:=[640,480]"
+    depends_on: [ros-core]
     restart: unless-stopped
     networks:
       robot-net:
@@ -77,31 +79,12 @@ services:
     volumes:
       - ../site:/usr/share/nginx/html:ro
       - ../site/nginx/conf.d:/etc/nginx/conf.d:ro
-    ports:
-      - "8081:80"
-    depends_on:
-      - web-video-server
-      - netstatus
+    ports: ["8081:80"]
+    depends_on: [web-video-server, netstatus]
     restart: unless-stopped
     networks:
       robot-net:
         aliases: [video-dashboard]
-
-# Optional: RoboClaw driver service (uncomment and adjust when ready)
-#  roboclaw_driver:
-#    build:
-#      context: ../services/roboclaw_driver
-#    container_name: robot-roboclaw_driver-1
-#    environment:
-#      - ROS_DOMAIN_ID=0
-#    devices:
-#      - "/dev/ttyACM0:/dev/ttyACM0"   # update if different
-#    depends_on:
-#      - ros-core
-#    restart: unless-stopped
-#    networks:
-#      robot-net:
-#        aliases: [roboclaw-driver]
 
 networks:
   robot-net:
