@@ -5,18 +5,27 @@ networks:
 services:
 
   netstatus:
-    container_name: robot-netstatus-1
-    image: python:3.11-slim
-    # ... your command/env/volumes here ...
-    expose:
-      - "5000"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/status >/dev/null 2>&1 || curl -fsS http://127.0.0.1:5000/status >/dev/null"]
-      interval: 10s
-      timeout: 2s
-      retries: 5
-      start_period: 10s
+    build:
+      context: ../netstatus
+    container_name: robot-netstatus
     restart: unless-stopped
+    environment:
+      TZ: "America/Los_Angeles"
+      # Battery mock (override these when you wire real data)
+      ROBOT_BATT_MODE: "mock"           # mock | file (roboclaw later)
+      ROBOT_BATT_V: "24.7"              # volts
+      ROBOT_BATT_I: "-0.20"             # amps (negative = discharge)
+      ROBOT_BATT_SOURCE_FILE: "/data/battery.json"
+    volumes:
+      - ../data:/data                      # optional for file mode
+    networks:
+      - robot-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/status"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   ros-core:
     image: ros:iron-ros-core

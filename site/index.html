@@ -1,253 +1,226 @@
 <!doctype html>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RPi-Robot Dashboard</title>
-<style>
-  :root { --bg:#0b1321; --card:#121a2b; --muted:#7f8ead; --text:#e6ecff; --accent:#4da3ff; --good:#2ecc71; --warn:#f1c40f; --bad:#e74c3c; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif; background:var(--bg); color:var(--text);}
-  header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #1f2b44; }
-  header h1{ margin:0; font-size:20px; letter-spacing:.2px }
-  .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#141f36; color:var(--muted); font-size:12px; }
-  .dot{ width:8px; height:8px; border-radius:50%; background:#7a8297; }
-  .dot.ok{ background:var(--good) } .dot.warn{ background:var(--warn) } .dot.bad{ background:var(--bad) }
-  main { padding:20px; }
-  .grid { display:grid; gap:16px; grid-template-columns: 2fr 1fr; }
-  @media (max-width:1100px){ .grid { grid-template-columns: 1fr } }
-  .card { background:var(--card); border:1px solid #1f2b44; border-radius:16px; padding:16px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
-  .card h2{ margin:0 0 12px; font-size:16px; color:#cfe2ff; }
-  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; align-items:center }
-  .controls input[type=text]{ background:#0e1628; color:var(--text); border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; min-width:220px }
-  .controls select, .controls button { background:#0e1628; color:var(--text); border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; }
-  .controls button:hover{ border-color:#335a99; }
-  #videoWrap{ position:relative; background:#0a1120; border-radius:12px; overflow:hidden; min-height:240px; max-width:640px; }
-  #streamImg, #snapImg{ width:100%; display:block; height:auto; }
-  .hint{ color:var(--muted); font-size:12px; margin-top:6px }
-  .telemetry{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px }
-  .trow{ display:flex; align-items:center; justify-content:space-between; background:#0e1628; border:1px solid #1f2b44; border-radius:10px; padding:8px 10px; }
-  .trow label{ color:#aebbd8; }
-  .val{ font-variant-numeric: tabular-nums; }
-  pre.json{ margin:0; background:#0e1628; border:1px solid #1f2b44; border-radius:10px; padding:12px; overflow:auto; max-height:300px }
-  footer { padding:10px 20px; color:#8ea0c6; font-size:12px }
-  a { color: var(--accent); text-decoration: none; }
-</style>
-
-<header>
-  <h1>RPi-Robot Dashboard</h1>
-  <div class="pill"><span id="statusDot" class="dot"></span><span id="statusText">initializingâ€¦</span></div>
-</header>
-
-<main>
-  <div class="grid">
-    <!-- VIDEO -->
-    <section class="card">
-      <h2>Live Video</h2>
-      <div class="controls">
-        <label for="topic">Topic</label>
-        <input id="topic" type="text" placeholder="/image_raw" />
-        <label for="mode">Mode</label>
-        <select id="mode">
-          <option value="stream">Stream (MJPEG)</option>
-          <option value="snapshot">Snapshot (1 fps)</option>
-        </select>
-        <label for="vidSize">Size</label>
-        <select id="vidSize">
-          <option value="480">480px</option>
-          <option value="640" selected>640px</option>
-          <option value="800">800px</option>
-        </select>
-        <button id="apply">Apply</button>
-        <button id="cycle">Try Next Variant</button>
-        <button id="snap">Take Snapshot</button>
-      </div>
-      <div id="videoWrap">
-        <img id="streamImg" alt="Video stream" />
-        <img id="snapImg" alt="Snapshot mode" style="display:none" />
-      </div>
-      <div class="hint" id="videoHint">Using <code>/stream?topic=/image_raw</code></div>
-    </section>
-
-    <!-- TELEMETRY -->
-    <section class="card">
-      <h2>System Telemetry</h2>
-      <div class="telemetry">
-        <div class="trow"><label>CPU %</label><span id="cpuPct" class="val">â€“</span></div>
-        <div class="trow"><label>Load Avg</label><span id="load" class="val">â€“</span></div>
-        <div class="trow"><label>CPU Temp</label><span id="cpuTemp" class="val">â€“</span></div>
-        <div class="trow"><label>Uptime</label><span id="uptime" class="val">â€“</span></div>
-        <div class="trow"><label>Disk Used</label><span id="disk" class="val">â€“</span></div>
-      </div>
-      <p class="hint">Endpoints: <a href="/status" target="_blank">/status</a>, <a href="/status_temp" target="_blank">/status_temp</a>, <a href="/status_uptime" target="_blank">/status_uptime</a></p>
-    </section>
-
-    <!-- RAW JSON -->
-    <section class="card" style="grid-column: 1 / -1;">
-      <h2>Raw Status JSON</h2>
-      <pre class="json" id="rawJson">{}</pre>
-    </section>
-  </div>
-</main>
-
-<footer>web_video_server proxied at <code>/stream</code> and <code>/snapshot</code> â€¢ telemetry at <code>/status*</code></footer>
-
-<script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const topicEl = $('topic');
-  const modeEl = $('mode');
-  const sizeEl = $('vidSize');
-  const applyBtn = $('apply');
-  const cycleBtn = $('cycle');
-  const snapBtn  = $('snap');
-  const streamImg = $('streamImg');
-  const snapImg = $('snapImg');
-  const statusDot = $('statusDot');
-  const statusText = $('statusText');
-  const cpuPct = $('cpuPct'); const load = $('load'); const cpuTemp = $('cpuTemp');
-  const uptime = $('uptime'); const disk = $('disk'); const rawJson = $('rawJson');
-  const hint = $('videoHint');
-  const videoWrap = $('videoWrap');
-
-  // Persisted settings
-  const S = {
-    topic: localStorage.getItem('topic') || '/image_raw',
-    mode: localStorage.getItem('mode') || 'stream',
-    variant: parseInt(localStorage.getItem('variant') || '0', 10),
-    vidSize: parseInt(localStorage.getItem('vidSize') || '640', 10)
-  };
-  // normalize topic to start with "/"
-  if (!String(S.topic).startsWith('/')) S.topic = '/' + S.topic;
-
-  topicEl.value = S.topic;
-  modeEl.value  = S.mode;
-  sizeEl.value  = String(S.vidSize);
-  videoWrap.style.maxWidth = S.vidSize + 'px';
-
-  // Stream URL variants (no URL-encoding for topic)
-  const variants = [
-    t => `/stream?topic=${t}`,
-    t => `/stream?topic=${t}&type=ros_compressed`,
-    t => `/stream?topic=${t}&type=raw`,
-  ];
-
-  function setStatus(level, msg){
-    statusDot.className = 'dot ' + (level || '');
-    statusText.textContent = msg || '';
-  }
-
-  function humanBytes(n){ if(n==null) return 'â€“'; const u=['B','KB','MB','GB','TB'];
-    let i=0,v=Number(n); while(v>=1024 && i<u.length-1){ v/=1024; i++; } return v.toFixed(1)+' '+u[i]; }
-  function humanSeconds(s){
-    if(s==null) return 'â€“'; s = Math.floor(Number(s));
-    const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60); s%=60;
-    const parts=[]; if(d) parts.push(d+'d'); if(h) parts.push(h+'h'); if(m) parts.push(m+'m'); parts.push(s+'s'); return parts.join(' ');
-  }
-
-  function applyVideo(){
-    S.topic = topicEl.value || '/image_raw';
-    if (!S.topic.startsWith('/')) S.topic = '/' + S.topic;
-    S.mode = modeEl.value;
-    S.vidSize = parseInt(sizeEl.value, 10) || 640;
-    localStorage.setItem('topic', S.topic);
-    localStorage.setItem('mode', S.mode);
-    localStorage.setItem('vidSize', String(S.vidSize));
-
-    videoWrap.style.maxWidth = S.vidSize + 'px';
-
-    if(S.mode === 'stream'){
-      const url = variants[S.variant % variants.length](S.topic);
-      streamImg.src = url;
-      streamImg.style.display = '';
-      snapImg.style.display = 'none';
-      hint.textContent = `Using ${url}`;
-    } else {
-      streamImg.style.display = 'none';
-      snapImg.style.display = '';
-      doSnapshot();
-      hint.textContent = `Using /snapshot?topic=${S.topic} (auto 1 fps)`;
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>RPi-Robot Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #161a22;
+      --muted: #9aa4b2;
+      --text: #e6edf3;
+      --accent: #7aa2f7;
+      --ok: #36c692;
+      --warn: #f5a524;
+      --bad: #f43f5e;
+      --card-radius: 16px;
     }
-  }
-
-  function cycleVariant(){
-    S.variant = (S.variant + 1) % variants.length;
-    localStorage.setItem('variant', String(S.variant));
-    if(S.mode === 'stream') applyVideo();
-  }
-
-  let snapTimer = null;
-  function doSnapshot(){
-    const url = `/snapshot?topic=${S.topic}&t=${Date.now()}`;
-    snapImg.src = url;
-    if(snapTimer) clearTimeout(snapTimer);
-    if(S.mode === 'snapshot'){
-      snapTimer = setTimeout(doSnapshot, 1000); // 1 fps refresh
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 20% -10%, #151a23, #0b0d11 70%), var(--bg);
+      color: var(--text);
     }
-  }
-
-  applyBtn.addEventListener('click', applyVideo);
-  cycleBtn.addEventListener('click', cycleVariant);
-  snapBtn.addEventListener('click', () => {
-    const url = `/snapshot?topic=${S.topic}&t=${Date.now()}`;
-    window.open(url, '_blank');
-  });
-  sizeEl.addEventListener('change', applyVideo);
-
-  // Detect stream health via onload/onerror of the <img>
-  let lastOk = 0;
-  streamImg.addEventListener('load', () => { lastOk = Date.now(); setStatus('ok','streaming'); });
-  streamImg.addEventListener('error', () => setStatus('warn','stream error â€” try Next Variant or Snapshot'));
-
-  // Telemetry poll (robust uptime parsing: JSON OR plain text)
-  async function poll(){
-    try{
-      const [s, t, u] = await Promise.allSettled([
-        fetch('/status'), fetch('/status_temp'), fetch('/status_uptime')
-      ]);
-      let js = {};
-      if(s.status==='fulfilled' && s.value.ok){
-        js = await s.value.json();
-        rawJson.textContent = JSON.stringify(js,null,2);
-        const cpuPercent = js?.cpu?.percent;
-        const la = js?.cpu?.load_avg;
-        const diskTotal = js?.disk?.total, diskUsed = js?.disk?.used;
-        cpuPct.textContent = cpuPercent!=null ? cpuPercent.toFixed(1)+'%' : 'â€“';
-        load.textContent = Array.isArray(la) ? la.map(v=>Number(v).toFixed(2)).join(', ') : 'â€“';
-        disk.textContent = (diskTotal!=null && diskUsed!=null) ? `${humanBytes(diskUsed)} / ${humanBytes(diskTotal)}` : 'â€“';
-      }
-      if(t.status==='fulfilled' && t.value.ok){
-        const tj = await t.value.json().catch(async ()=>({cpu_temp_c: parseFloat((await t.value.text())||'NaN')}));
-        const c = tj?.cpu_temp_c;
-        cpuTemp.textContent = (c!=null && !Number.isNaN(c)) ? c.toFixed(2)+' Â°C' : 'â€“';
-      }
-      if(u.status==='fulfilled' && u.value.ok){
-        let upSecs = null;
-        const ct = u.value.headers.get("content-type") || "";
-        try {
-          if (ct.includes("application/json")) {
-            const uj = await u.value.json();
-            upSecs = uj?.uptime_seconds ?? uj?.uptime_sec ?? uj?.uptime ?? uj?.seconds ?? null;
-          } else {
-            const txt = await u.value.text();
-            const m = String(txt).match(/([0-9]+(?:\.[0-9]+)?)/);
-            if (m) upSecs = parseFloat(m[1]);
-          }
-        } catch(e) {}
-        if (upSecs != null) uptime.textContent = humanSeconds(upSecs);
-      }
-      if(S.mode==='stream'){
-        if(Date.now()-lastOk > 4000) setStatus('warn','no frames yet â€” try Next Variant or switch to Snapshot');
-      } else {
-        setStatus('ok','snapshot mode');
-      }
-    }catch(e){
-      setStatus('bad','telemetry error');
-    } finally {
-      setTimeout(poll, 2000);
+    header {
+      position: sticky; top: 0; z-index: 3;
+      background: rgba(11,13,17,0.6); backdrop-filter: blur(6px);
+      border-bottom: 1px solid #1f2430;
     }
-  }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .title { display:flex; align-items:center; gap:12px; }
+    .title h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+    .pill { font-size: 12px; color: var(--muted); border: 1px solid #2a3242; padding: 4px 8px; border-radius: 999px; }
+    main { padding-bottom: 48px; }
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: 1.2fr .8fr;
+    }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: linear-gradient(180deg, #161a22, #131720);
+      border: 1px solid #202637;
+      border-radius: var(--card-radius);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03);
+      overflow: hidden;
+    }
+    .panel .hd {
+      padding: 12px 14px; border-bottom: 1px solid #202637;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel .hd h2 { margin:0; font-size: 14px; font-weight: 600; letter-spacing: .3px; }
+    .panel .bd { padding: 14px; }
+    .video-wrap { display:flex; flex-direction:column; gap:12px; }
+    .video {
+      width: 100%; aspect-ratio: 16/9; background: #0b0d11; border: 1px solid #22293a; border-radius: 12px; overflow: hidden;
+      display: grid; place-items: center;
+    }
+    .video img, .video video { width: 100%; height: 100%; object-fit: cover; display:block; }
+    .row { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    .card {
+      background: #121722; border: 1px solid #202637; border-radius: 12px; padding: 12px;
+    }
+    .card h3 { margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--accent); }
+    .kv { display:flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px dashed #232b3c;}
+    .kv:first-of-type { border-top: none; }
+    .k { color: var(--muted); font-size: 12px; }
+    .v { font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display:inline-block; vertical-align: middle; margin-right:6px; background: var(--warn); }
+    .status-dot.ok { background: var(--ok); } .status-dot.bad { background: var(--bad); }
+    a.btn {
+      display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #2a3242; border-radius:10px; color: var(--text); text-decoration: none;
+    }
+    code.small { font-size: 12px; color: #aeb8c7; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="title">
+        <span class="pill">RPi-Robot</span>
+        <h1>Dashboard</h1>
+        <span class="pill" id="overall-status"><span class="status-dot" id="status-dot"></span><span id="status-text">Checking…</span></span>
+        <span class="pill" id="uptime-pill">Uptime: <span id="uptime">—</span></span>
+      </div>
+    </div>
+  </header>
 
-  // Boot
-  applyVideo();
-  poll();
-})();
-</script>
+  <main class="wrap">
+    <div class="grid">
+      <!-- Left: Video & quick actions -->
+      <section class="panel">
+        <div class="hd">
+          <h2>Live Video Stream</h2>
+          <div class="muted">topic: <code class="small">/image_raw</code></div>
+        </div>
+        <div class="bd">
+          <div class="video-wrap">
+            <!-- Option A: MJPEG stream -->
+            <div class="video">
+              <img id="video" alt="Live video" src="/stream?topic=/image_raw" onerror="this.alt='Video offline'; this.src='';" />
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap: wrap;">
+              <a class="btn" href="/snapshot?topic=/image_raw" target="_blank" rel="noopener">Snapshot</a>
+              <a class="btn" href="/status" target="_blank" rel="noopener">Raw /status</a>
+              <a class="btn" href="/status_battery" target="_blank" rel="noopener">Raw /status_battery</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Telemetry cards -->
+      <aside class="panel">
+        <div class="hd">
+          <h2>System Telemetry</h2>
+          <div class="muted" id="last-refresh">—</div>
+        </div>
+        <div class="bd">
+          <div class="row">
+            <!-- CPU -->
+            <div class="card">
+              <h3>CPU</h3>
+              <div class="kv"><div class="k">Temp</div><div class="v" id="cpu-temp">—</div></div>
+              <div class="kv"><div class="k">Usage</div><div class="v"><span id="cpu-pct">—</span>%</div></div>
+              <div class="kv"><div class="k">Load (1m)</div><div class="v" id="load1">—</div></div>
+            </div>
+
+            <!-- Memory / Disk -->
+            <div class="card">
+              <h3>Resources</h3>
+              <div class="kv"><div class="k">RAM Used</div><div class="v" id="mem-used">—</div></div>
+              <div class="kv"><div class="k">Disk Used</div><div class="v" id="disk-used">—</div></div>
+              <div class="kv"><div class="k">Net (rx / tx)</div><div class="v" id="net-io">—</div></div>
+            </div>
+
+            <!-- Battery -->
+            <div class="card" id="battery-card">
+              <h3>Battery</h3>
+              <div class="kv"><div class="k">Voltage</div><div class="v"><span id="batt-v">—</span> V</div></div>
+              <div class="kv"><div class="k">Current</div><div class="v"><span id="batt-i">—</span> A</div></div>
+              <div class="kv"><div class="k">SoC (est)</div><div class="v"><span id="batt-soc">—</span>%</div></div>
+              <div class="kv"><div class="k">Source</div><div class="v muted" id="batt-src">—</div></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Footer / tiny status -->
+    <div style="margin-top:16px; color: var(--muted); font-size: 12px;">
+      <span>Status JSON:</span>
+      <code class="small" id="status-json-hint">/status</code>
+    </div>
+  </main>
+
+  <script>
+    // --- helpers ---
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n, d=2) => (n === null || n === undefined || Number.isNaN(n)) ? "—" : Number(n).toFixed(d);
+    const bytes = (n) => {
+      if (n === null || n === undefined) return "—";
+      const u = ["B","KB","MB","GB","TB"]; let i=0; let x = Number(n);
+      while (x >= 1024 && i < u.length-1) { x /= 1024; i++; }
+      return `${x.toFixed(1)} ${u[i]}`;
+    };
+    const nowStr = () => new Date().toLocaleTimeString();
+
+    async function fetchJSON(path) {
+      const r = await fetch(path, { cache: "no-store" });
+      if (!r.ok) throw new Error(`${path} HTTP ${r.status}`);
+      return r.json();
+    }
+
+    // --- renderers ---
+    async function renderCore() {
+      try {
+        const s = await fetchJSON("/status");
+        // CPU
+        if (s.temp && s.temp.cpu_temp_c != null) $("cpu-temp").textContent = `${fmt(s.temp.cpu_temp_c, 2)} °C`;
+        if (s.cpu) {
+          if (s.cpu.percent != null) $("cpu-pct").textContent = fmt(s.cpu.percent, 0);
+          if (Array.isArray(s.cpu.load_avg)) $("load1").textContent = fmt(s.cpu.load_avg[0], 2);
+        }
+        // Mem/Disk
+        if (s.mem) $("mem-used").textContent = `${bytes(s.mem.used)} / ${bytes(s.mem.total)}`;
+        if (s.disk) $("disk-used").textContent = `${bytes(s.disk.used)} / ${bytes(s.disk.total)}`;
+        if (s.net) $("net-io").textContent = `${bytes(s.net.bytes_recv)} / ${bytes(s.net.bytes_sent)}`;
+        // Uptime
+        if (s.uptime && s.uptime.host_uptime_sec != null) {
+          const sec = s.uptime.host_uptime_sec;
+          const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+          $("uptime").textContent = `${h}h ${m}m`;
+        }
+        $("last-refresh").textContent = `Updated ${nowStr()}`;
+        // Overall status indicator
+        $("status-dot").classList.remove("bad"); $("status-dot").classList.add("ok");
+        $("status-text").textContent = "Online";
+      } catch (e) {
+        $("last-refresh").textContent = `Update failed ${nowStr()}`;
+        $("status-dot").classList.remove("ok"); $("status-dot").classList.add("bad");
+        $("status-text").textContent = "Offline";
+      }
+    }
+
+    async function renderBattery() {
+      try {
+        const b = await fetchJSON("/status_battery");
+        $("batt-v").textContent = fmt(b.volts, 2);
+        $("batt-i").textContent = fmt(b.amps, 2);
+        $("batt-soc").textContent = b.soc_est == null ? "—" : Math.round(b.soc_est * 100);
+        $("batt-src").textContent = b.source || "unknown";
+      } catch {
+        $("batt-src").textContent = "error";
+      }
+    }
+
+    function loop() {
+      renderCore();
+      renderBattery();
+      setTimeout(loop, 3000); // refresh every 3s
+    }
+    document.addEventListener("DOMContentLoaded", loop);
+  </script>
+</body>
+</html>

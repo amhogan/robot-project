@@ -1,0 +1,6 @@
+address: 128
+baud: 19200
+device: /dev/ttyACM0
+nudge_duty: 2
+nudge_time_s: 0.2
+poll_interval_s: 0.3
